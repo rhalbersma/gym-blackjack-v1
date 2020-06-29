@@ -4,5 +4,5 @@
 #          http://www.boost.org/LICENSE_1_0.txt)
 
 from .agents import AlwaysHitAgent, RandomPlayAgent, AlwaysStandAgent, MimicDealerAgent, BasicStrategyAgent
-from .envs import State, Card, Action
+from .envs import State, Card, Action, states, cards
 from .utils import play, simulate
