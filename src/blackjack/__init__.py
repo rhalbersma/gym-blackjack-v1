@@ -5,4 +5,4 @@
 
 from .agents import AlwaysHitAgent, RandomPlayAgent, AlwaysStandAgent, MimicDealerAgent, BasicStrategyAgent
 from .envs import State, Card, Action
-from .utils import play, simulate, descriptives
+from .utils import play, simulate

@@ -28,7 +28,7 @@ import gym
 import blackjack as bj
 env = gym.make('Blackjack-v1')
 agent = bj.BasicStrategyAgent(env)
-stats =  bj.descriptives(bj.simulate(agent, env, episodes=10**6))
+stats = bj.simulate(agent, env, episodes=10**6)
 dict(zip(stats.data, stats.weights)), stats.mean, stats.tconfint_mean(.05)
 ```
 
@@ -39,7 +39,7 @@ The above code will output the distribution of outcomes (win, loss, tie), the me
 >>> import blackjack as bj
 >>> env = gym.make('Blackjack-v1')
 >>> agent = bj.BasicStrategyAgent(env)
->>> stats =  bj.descriptives(bj.simulate(agent, env, episodes=10**6))
+>>> stats = bj.simulate(agent, env, episodes=10**6)
 100%|██████████████████████████████| 1000000/1000000 [00:28<00:00, 35182.52it/s]
 >>> dict(zip(stats.data, stats.weights)), stats.mean, stats.tconfint_mean(.05)
 ({-1.0: 480046.0, 1.0: 432712.0, 0.0: 87242.0}, -0.047334, (-0.049204221221545476, -0.045463778778454526))

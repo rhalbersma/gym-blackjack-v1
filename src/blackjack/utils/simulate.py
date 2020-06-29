@@ -6,6 +6,8 @@
 from collections import defaultdict
 from tqdm import tqdm
 
+from .stats import descriptives
+
 def simulate(agent, env, episodes=10**6):
     """
     Simulate an agent in an environment over a number of episodes.
@@ -32,4 +34,4 @@ def simulate(agent, env, episodes=10**6):
             if done:
                 hist[total] += 1
                 break
-    return hist
+    return descriptives(hist)

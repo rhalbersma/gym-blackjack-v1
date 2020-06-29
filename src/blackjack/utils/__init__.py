@@ -5,4 +5,3 @@
 
 from .play import play
 from .simulate import simulate
-from .stats import descriptives
