@@ -3,7 +3,7 @@
 #    (See accompanying file LICENSE_1_0.txt or copy at
 #          http://www.boost.org/LICENSE_1_0.txt)
 
-from blackjack.envs import Action
+from ..envs import Action
 
 class AlwaysStandAgent:
     """

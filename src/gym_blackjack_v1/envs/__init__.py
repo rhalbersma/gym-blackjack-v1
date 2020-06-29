@@ -19,5 +19,5 @@ def register(id, entry_point, force=True):
 
 register(
     id='Blackjack-v1',
-    entry_point='blackjack.envs.blackjack_v1:BlackjackEnv',
+    entry_point='gym_blackjack_v1.envs.blackjack_v1:BlackjackEnv',
 )

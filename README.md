@@ -12,8 +12,8 @@
 ## Installation
 
 ```bash
-git clone https://github.com/rhalbersma/blackjack.git
-cd blackjack
+git clone https://github.com/rhalbersma/gym-blackjack-v1.git
+cd gym-blackjack-v1
 python3 -m venv .env
 source .env/bin/activate
 pip install -e .
@@ -25,7 +25,7 @@ Let's simulate one millions blackjack hands using Sutton and Barto's blackjack r
 
 ```python
 import gym
-import blackjack as bj
+import gym_blackjack_v1 as bj
 env = gym.make('Blackjack-v1')
 agent = bj.BasicStrategyAgent(env)
 stats = bj.simulate(agent, env, episodes=10**6)
@@ -36,7 +36,7 @@ The above code will output the distribution of outcomes (win, loss, tie), the me
 
 <pre>
 >>> import gym
->>> import blackjack as bj
+>>> import gym_blackjack_v1 as bj
 >>> env = gym.make('Blackjack-v1')
 >>> agent = bj.BasicStrategyAgent(env)
 >>> stats = bj.simulate(agent, env, episodes=10**6)

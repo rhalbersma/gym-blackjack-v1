@@ -6,7 +6,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='blackjack',
+    name='gym_blackjack_v1',
     version='0.1.0-dev0',
     description='OpenAI Gym blackjack environment (v1)',
     url='https://github.com/rhalbersma/blackjack',

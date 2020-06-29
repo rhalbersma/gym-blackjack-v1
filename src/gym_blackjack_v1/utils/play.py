@@ -4,7 +4,8 @@
 #          http://www.boost.org/LICENSE_1_0.txt)
 
 import gym
-from blackjack import Action, BasicStrategyAgent
+from ..agents import BasicStrategyAgent
+from ..envs import Action
 
 def summary(episodes, total):
     print(f"""
