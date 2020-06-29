@@ -1,0 +1,9 @@
+# Virtual environment
+.env/
+
+# Python generated
+*.egg-info
+*__pycache__
+
+# Visual Studio Code generated
+.vscode
