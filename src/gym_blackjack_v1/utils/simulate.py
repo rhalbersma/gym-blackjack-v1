@@ -4,9 +4,9 @@
 #          http://www.boost.org/LICENSE_1_0.txt)
 
 from collections import defaultdict
+import numpy as np
+import statsmodels.stats.weightstats as ssw
 from tqdm import tqdm
-
-from .stats import descriptives
 
 def simulate(agent, env, episodes=10**6):
     """
@@ -18,7 +18,7 @@ def simulate(agent, env, episodes=10**6):
         episodes (int): the number of episodes to simulate (default: 1,000,000).
 
     Returns:
-        A dictionary with the episodic reward distribution.
+        A DescrStatsW object with the episodic reward distribution.
 
     Notes:
         A progress bar is shown.
@@ -34,4 +34,7 @@ def simulate(agent, env, episodes=10**6):
             if done:
                 hist[total] += 1
                 break
-    return descriptives(hist)
+    return ssw.DescrStatsW(
+        data=np.array(list(hist.keys())),
+        weights=np.array(list(hist.values()))
+    )
