@@ -9,29 +9,6 @@ from gym import spaces
 from gym.utils import seeding
 import numpy as np
 
-class Action(IntEnum):
-    s = 0
-    h = 1
-
-action_labels = [ a.name[0] for a in Action ]
-
-class Card(IntEnum):
-    _2 =  0
-    _3 =  1
-    _4 =  2
-    _5 =  3
-    _6 =  4
-    _7 =  5
-    _8 =  6
-    _9 =  7
-    _T =  8
-    _A =  9
-
-card_labels = [ c.name[1:] for c in Card ]
-
-# Drawing cards from an infinite deck (i.e. from a single deck with replacement)
-deck = np.array([ c for c in range(Card._2, Card._T) ] + [ Card._T ] * 4 + [ Card._A ])
-
 class State(IntEnum):
     DEAL =  0
     H2   =  1
@@ -70,6 +47,26 @@ class State(IntEnum):
     BUST = 34
 
 state_labels = [ s.name for s in State ]
+
+class Card(IntEnum):
+    _2 =  0
+    _3 =  1
+    _4 =  2
+    _5 =  3
+    _6 =  4
+    _7 =  5
+    _8 =  6
+    _9 =  7
+    _T =  8 # 10, J, Q, K are all denoted as T
+    _A =  9
+
+card_labels = [ c.name[1:] for c in Card ]
+
+class Action(IntEnum):
+    s = 0
+    h = 1
+
+action_labels = [ a.name[0] for a in Action ]
 
 # Finite-state machine for going from one state to the next after drawing a card
 fsm = np.zeros((len(State), len(Card)), dtype=int)
@@ -143,8 +140,7 @@ class Terminal(IntEnum):
     _21   =  6
     _BJ   =  7 # 21 with the first 2 cards
 
-# Terminal state labels
-terminals = [ t.name[1:] for t in Terminal ]
+terminal_labels = [ t.name[1:] for t in Terminal ]
 
 # Transition matrix to terminal states when standing
 score = np.zeros(len(State), dtype=int)
@@ -184,6 +180,26 @@ _blackjack_v0_natural[Terminal._BJ, :Terminal._21]   = +1.5 # A player's winning
 _thorp = _sutton_barto.copy()
 _thorp[Terminal._BJ, :Terminal._BJ]                  = +1.5 # A player's winning blackjack pays 1.5 times the original bet.
 
+class InfiniteDeck:
+    """
+    An infinite deck of cards (i.e. drawing from a single suit with replacement).
+    """
+    def __init__(self, np_random):
+        self.cards = np.array([ c for c in range(Card._2, Card._T) ] + [ Card._T ] * 4 + [ Card._A ])
+        self.np_random = np_random
+
+    def draw(self):
+        """
+        Draw a single card.
+        """
+        return self.np_random.choice(self.cards, replace=True)
+
+    def deal(self):
+        """
+        Draw two player cards and one dealer card.
+        """
+        return self.draw(), self.draw(), self.draw()
+
 class BlackjackEnv(gym.Env):
     """
     Blackjack environment corresponding to Examples 5.1, 5.3 and 5.4 in
@@ -221,7 +237,7 @@ class BlackjackEnv(gym.Env):
 
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, payout=None, dealer_hits_on_soft_17=False):
+    def __init__(self, payout=None, dealer_hits_on_soft_17=False, deck=InfiniteDeck):
         """
         Initialize the state of the environment.
 
@@ -272,6 +288,7 @@ class BlackjackEnv(gym.Env):
         self.action_space = spaces.Discrete(len(Action))
         self.reward_range = (np.min(self.payout), np.max(self.payout))
         self.seed()
+        self.deck = deck(self.np_random)
         self.reset()
 
     def seed(self, seed=None):
@@ -289,20 +306,12 @@ class BlackjackEnv(gym.Env):
             R = self.payout[score[self.player], score[self.dealer]]
             return f'player: {p:>4}; dealer: {d:>4}; reward: {R:>+4}'
 
-    def _draw(self):
-        return self.np_random.choice(deck, replace=True)
-
-    def _deal(self):
-        p1, p2, up = self._draw(), self._draw(), self._draw()
-        self.info = { 'player': [ card_labels[p1], card_labels[p2] ], 'dealer': [ card_labels[up] ] }
-        return self.player_fsm[self.player_fsm[State.DEAL, p1], p2], up
-
     def _get_obs(self):
         return self.player, self.dealer
 
     def reset(self):
         """
-        Reset the state of the environment by drawing 2 player cards and 1 dealer card.
+        Reset the state of the environment by drawing two player cards and one dealer card.
 
         Returns:
             observation (object): the player's count and the dealer's upcard.
@@ -310,7 +319,9 @@ class BlackjackEnv(gym.Env):
         Notes:
             Cards are drawn from a single deck with replacement (i.e. from an infinite deck).
         """
-        self.player, self.dealer = self._deal()
+        p1, p2, up = self.deck.deal()
+        self.info = { 'player': [ card_labels[p1], card_labels[p2] ], 'dealer': [ card_labels[up] ] }
+        self.player, self.dealer = self.player_fsm[self.player_fsm[State.DEAL, p1], p2], up
         return self._get_obs()
 
     def explore(self, start):
@@ -332,7 +343,7 @@ class BlackjackEnv(gym.Env):
 
     def step(self, action):
         if action == Action.h:
-            next = self._draw()
+            next = self.deck.draw()
             self.info['player'].append(card_labels[next])
             self.player = self.player_fsm[self.player, next]
             done = self.player in self.player_terminal
@@ -342,7 +353,7 @@ class BlackjackEnv(gym.Env):
             if self.player not in self.player_terminal:
                 self.dealer = self.dealer_fsm[State.DEAL, self.dealer]
                 while True:
-                    next = self._draw()
+                    next = self.deck.draw()
                     self.info['dealer'].append(card_labels[next])
                     self.dealer = self.dealer_fsm[self.dealer, next]
                     if self.dealer in self.dealer_terminal:
