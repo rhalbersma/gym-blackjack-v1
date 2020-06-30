@@ -197,8 +197,8 @@ class BlackjackEnv(gym.Env):
 
     Observations:
         There are 35 * 10 = 350 discrete states:
-            35 player counts (DEAL, H2-H21, TEN, ACE, S12-S21, BJ, BUST)
-            10 dealer cards showing (2-9, TEN, ACE)
+            35 player counts (DEAL, H2-H21, T, A, S12-S21, BJ, BUST)
+            10 dealer cards showing (2-9, T, A)
 
     Actions:
         There are 2 actions for the player:
