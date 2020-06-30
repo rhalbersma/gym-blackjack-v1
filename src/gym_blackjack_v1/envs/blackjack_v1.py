@@ -279,13 +279,13 @@ class BlackjackEnv(gym.Env):
         return [seed]
 
     def render(self, mode='human'):
-        p = states[self.player]
+        p = state_labels[self.player]
         upcard_only = self.dealer in range(Card._2, Card._A + 1)
         if self.player not in self.player_terminal and upcard_only:
-            d = cards[self.dealer]
+            d = card_labels[self.dealer]
             return f'player: {p:>4}; dealer: {d:>4};'
         else:
-            d = states[self.dealer_fsm[State.DEAL, self.dealer] if upcard_only else self.dealer]
+            d = state_labels[self.dealer_fsm[State.DEAL, self.dealer] if upcard_only else self.dealer]
             R = self.payout[score[self.player], score[self.dealer]]
             return f'player: {p:>4}; dealer: {d:>4}; reward: {R:>+4}'
 
@@ -294,7 +294,7 @@ class BlackjackEnv(gym.Env):
 
     def _deal(self):
         p1, p2, up = self._draw(), self._draw(), self._draw()
-        self.info = { 'player': [ cards[p1], cards[p2] ], 'dealer': [ cards[up] ] }
+        self.info = { 'player': [ card_labels[p1], card_labels[p2] ], 'dealer': [ card_labels[up] ] }
         return self.player_fsm[self.player_fsm[State.DEAL, p1], p2], up
 
     def _get_obs(self):
@@ -333,7 +333,7 @@ class BlackjackEnv(gym.Env):
     def step(self, action):
         if action == Action.h:
             next = self._draw()
-            self.info['player'].append(cards[next])
+            self.info['player'].append(card_labels[next])
             self.player = self.player_fsm[self.player, next]
             done = self.player in self.player_terminal
         else:
@@ -343,7 +343,7 @@ class BlackjackEnv(gym.Env):
                 self.dealer = self.dealer_fsm[State.DEAL, self.dealer]
                 while True:
                     next = self._draw()
-                    self.info['dealer'].append(cards[next])
+                    self.info['dealer'].append(card_labels[next])
                     self.dealer = self.dealer_fsm[self.dealer, next]
                     if self.dealer in self.dealer_terminal:
                         break
