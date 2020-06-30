@@ -4,7 +4,7 @@
 #          http://www.boost.org/LICENSE_1_0.txt)
 
 import gym
-from .blackjack_v1 import State, Card, Action, states, cards
+from .blackjack_v1 import State, Card, Action, state_labels, card_labels
 
 def register(id, entry_point, force=True):
     env_specs = gym.envs.registry.env_specs

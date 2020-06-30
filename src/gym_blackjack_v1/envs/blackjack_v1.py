@@ -9,15 +9,12 @@ from gym import spaces
 from gym.utils import seeding
 import numpy as np
 
-# Actions
 class Action(IntEnum):
     s = 0
     h = 1
 
-# Action labels
-actions = [ a.name[0] for a in Action ]
+action_labels = [ a.name[0] for a in Action ]
 
-# Cards
 class Card(IntEnum):
     _2 =  0
     _3 =  1
@@ -30,13 +27,11 @@ class Card(IntEnum):
     _T =  8
     _A =  9
 
-# Card labels
-cards = [ c.name[1:] for c in Card ]
+card_labels = [ c.name[1:] for c in Card ]
 
 # Drawing cards from an infinite deck (i.e. from a single deck with replacement)
 deck = np.array([ c for c in range(Card._2, Card._T) ] + [ Card._T ] * 4 + [ Card._A ])
 
-#  States
 class State(IntEnum):
     DEAL =  0
     H2   =  1
@@ -74,8 +69,7 @@ class State(IntEnum):
     BJ   = 33
     BUST = 34
 
-# State labels
-states = [ s.name for s in State ]
+state_labels = [ s.name for s in State ]
 
 # Finite-state machine for going from one state to the next after drawing a card
 fsm = np.zeros((len(State), len(Card)), dtype=int)
