@@ -9,7 +9,7 @@ setup(
     name='gym_blackjack_v1',
     version='0.1.0-dev0',
     description='OpenAI Gym blackjack environment (v1)',
-    url='https://github.com/rhalbersma/blackjack',
+    url='https://github.com/rhalbersma/gym-blackjack-v1',
     author='Rein Halbersma',
     author_email='rhalbersma@gmail.com',
     license='Boost Software License 1.0 (BSL-1.0)',
