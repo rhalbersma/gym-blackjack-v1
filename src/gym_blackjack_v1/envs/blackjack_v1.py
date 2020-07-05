@@ -146,18 +146,18 @@ fsm_hit[Hand.S21, Card._A] = State.H12
 fsm_hit[Hand.BJ, :] = fsm_hit[Hand.S21, :]
 
 # Finite-state machine for going from one hand to the next state after 'standing'.
-fsm_stand = np.zeros(len(Hand), dtype=int)
-fsm_stand[Hand.DEAL:Hand.H17] = State._16
+fsm_stand = np.zeros((len(Hand), 1), dtype=int)
+fsm_stand[Hand.DEAL:Hand.H17, :] = State._16
 for _i, _h in enumerate(range(Hand.H17, Hand.H21 + 1)):
-    fsm_stand[_h] = State._17 + _i
-fsm_stand[Hand.T:Hand.S17] = State._16
+    fsm_stand[_h, :] = State._17 + _i
+fsm_stand[Hand.T:Hand.S17, :] = State._16
 for _i, _s in enumerate(range(Hand.S17, Hand.S21 + 1)):
-    fsm_stand[_s] = State._17 + _i
-fsm_stand[Hand.BJ] = State._BJ
+    fsm_stand[_s, :] = State._17 + _i
+fsm_stand[Hand.BJ, :] = State._BJ
 
 # Map a Hand to a Count
 count = np.zeros(len(State), dtype=int)
-count[:len(Hand)] = fsm_stand - len(Hand)
+count[:len(Hand)] = fsm_stand[:, 0] - len(Hand)
 for _s in range(State._BUST, State._BJ + 1):
     count[_s] = _s - len(Hand)
 
