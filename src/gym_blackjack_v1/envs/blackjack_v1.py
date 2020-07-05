@@ -43,26 +43,26 @@ class Hand(IntEnum):
     S19  = 30
     S20  = 31
     S21  = 32
-    AT   = 33
+    BJ   = 33
 
 hand_labels = [ h.name for h in Hand ]
 
 class Count(IntEnum):
-    BUST =  0 # all counts above 21
-    _16  =  1 # all counts below 17
-    _17  =  2
-    _18  =  3
-    _19  =  4
-    _20  =  5
-    _21  =  6
-    BJ   =  7 # 21 with the first 2 cards
+    _BUST =  0 # all counts above 21
+    _16   =  1 # all counts below 17
+    _17   =  2
+    _18   =  3
+    _19   =  4
+    _20   =  5
+    _21   =  6
+    _BJ   =  7 # 21 with the first 2 cards
 
 count_labels = [
     c.name[c.name.startswith('_'):]
     for c in Count
 ]
 
-_offset = Hand.AT + 1
+_offset = Hand.BJ + 1
 for key, value in Count.__members__.items():
     extend_enum(Hand, key, value + _offset)
 
@@ -108,18 +108,18 @@ fsm_hit[Hand.H11, Card._A] = Hand.H12
 for _i, _h in enumerate(range(Hand.H12, Hand.H21)):
     for _j, _c in enumerate(range(Card._2, Card._T - _i)):
         fsm_hit[_h, _c] = _h + 2 + _j
-    fsm_hit[_h, (Card._T - _i):Card._A] = Hand.BUST
+    fsm_hit[_h, (Card._T - _i):Card._A] = Hand._BUST
     fsm_hit[_h, Card._A] = _h + 1
 
-fsm_hit[Hand.H21, :] = Hand.BUST
+fsm_hit[Hand.H21, :] = Hand._BUST
 
 for _j, _c in enumerate(range(Card._2, Card._A)):
     fsm_hit[Hand.T, _c] = Hand.H12 + _j
-fsm_hit[Hand.T, Card._A] = Hand.AT
+fsm_hit[Hand.T, Card._A] = Hand.BJ
 
 for _j, _c in enumerate(range(Card._2, Card._T)):
     fsm_hit[Hand.A, _c] = Hand.S13 + _j
-fsm_hit[Hand.A, Card._T] = Hand.AT
+fsm_hit[Hand.A, Card._T] = Hand.BJ
 fsm_hit[Hand.A, Card._A] = Hand.S12
 
 for _i, _s in enumerate(range(Hand.S12, Hand.S21)):
@@ -133,9 +133,9 @@ for _c, _j in enumerate(range(Card._2, Card._A)):
     fsm_hit[Hand.S21, _c] = Hand.H13 + _j
 fsm_hit[Hand.S21, Card._A] = Hand.H12
 
-fsm_hit[Hand.AT,   :] = fsm_hit[Hand.S21, :]
+fsm_hit[Hand.BJ, :] = fsm_hit[Hand.S21, :]
 
-for _c in range(Hand.BUST, Hand.BJ + 1):
+for _c in range(Hand._BUST, Hand._BJ + 1):
     fsm_hit[_c, :] = _c
 
 # Finite-state machine for going from one hand to the next after 'standing'.
@@ -146,8 +146,8 @@ for _i, _h in enumerate(range(Hand.H17, Hand.H21 + 1)):
 fsm_stand[Hand.T:Hand.S17] = Hand._16
 for _i, _s in enumerate(range(Hand.S17, Hand.S21 + 1)):
     fsm_stand[_s] = Hand._17 + _i
-fsm_stand[Hand.AT] = Hand.BJ
-for _c in range(Hand.BUST, Hand.BJ + 1):
+fsm_stand[Hand.BJ] = Hand._BJ
+for _c in range(Hand._BUST, Hand._BJ + 1):
     fsm_stand[_c: ] = _c
 
 # Map a Hand to a Count
@@ -159,7 +159,7 @@ stand_on_17 = np.full(len(Hand), Action.h)
 for _h in range(Hand.H17, Hand.H21 + 1):
     stand_on_17[_h] = Action.s
 
-for _s in range(Hand.S17, Hand.BJ + 1):
+for _s in range(Hand.S17, Hand._BJ + 1):
     stand_on_17[_s] = Action.s
 
 # Policy for a dealer who hits on soft 17.
@@ -168,26 +168,26 @@ hit_on_soft_17[Hand.S17] = Action.h
 
 # The payout structure as specified in Sutton and Barto.
 _sutton_barto = np.zeros((len(Count), len(Count)))      # The player and dealer have equal scores.
-_sutton_barto[Count.BUST, :         ]            = -1.  # The player busts regardless of whether the dealer busts.
-_sutton_barto[Count._16:, Count.BUST]            = +1.  # The dealer busts and the player doesn't.
+_sutton_barto[Count._BUST, :         ]           = -1.  # The player busts regardless of whether the dealer busts.
+_sutton_barto[Count._16:, Count._BUST]           = +1.  # The dealer busts and the player doesn't.
 _sutton_barto[np.tril_indices(len(Count), k=-1)] = +1.  # The player scores higher than the dealer.
 _sutton_barto[np.triu_indices(len(Count), k=+1)] = -1.  # The dealer scores higher than the player.
 
 # The payout structure as specified in the default Blackjack-v0 environment with natural=False.
 # Note: in contrast to Sutton and Barto, blackjack is considered equivalent to 21.
 _blackjack_v0 = _sutton_barto.copy()
-_blackjack_v0[Count.BJ , Count._21]              =  0.  # A player's blackjack and a dealer's 21 are treated equally.
-_blackjack_v0[Count._21, Count.BJ]               =  0.  # A player's 21 and a dealer's blackjack are treated equally.
+_blackjack_v0[Count._BJ, Count._21]              =  0.  # A player's blackjack and a dealer's 21 are treated equally.
+_blackjack_v0[Count._21, Count._BJ]              =  0.  # A player's 21 and a dealer's blackjack are treated equally.
 
 # The payout structure as specified in the alternative Blackjack-v0 environment with natural=True.
 # Note: in contrast to Sutton and Barto, blackjack is considered equivalent to 21.
 _blackjack_v0_natural = _blackjack_v0.copy()
-_blackjack_v0_natural[Count.BJ, :Count._21]      = +1.5 # A player's winning blackjack pays 1.5 times the original bet.
+_blackjack_v0_natural[Count._BJ, :Count._21]     = +1.5 # A player's winning blackjack pays 1.5 times the original bet.
 
 # The typical casino payout structure as specified in E.O. Thorp, "Beat the Dealer" (1966).
 # https://www.amazon.com/gp/product/B004G5ZTZQ/
 _thorp = _sutton_barto.copy()
-_thorp[Count.BJ, :Count.BJ]                      = +1.5 # A player's winning blackjack pays 1.5 times the original bet.
+_thorp[Count._BJ, :Count._BJ]                    = +1.5 # A player's winning blackjack pays 1.5 times the original bet.
 
 class InfiniteDeck:
     """
@@ -222,7 +222,7 @@ class BlackjackEnv(gym.Env):
 
     Observations:
         There are 34 * 10 = 340 discrete states:
-            34 player counts (DEAL, H2-H21, T, A, S12-S21, AT)
+            34 player counts (DEAL, H2-H21, T, A, S12-S21, BJ)
             10 dealer cards showing (2-9, T, A)
 
     Actions:
@@ -299,7 +299,7 @@ class BlackjackEnv(gym.Env):
     def render(self, mode='human'):
         p = hand_labels[self.player]
         upcard_only = self.dealer in range(Card._2, Card._A + 1)
-        if self.player != Hand.BUST and upcard_only:
+        if self.player != Hand._BUST and upcard_only:
             d = card_labels[self.dealer]
             return f'player: {p:>4}; dealer: {d:>4};'
         else:
@@ -347,7 +347,7 @@ class BlackjackEnv(gym.Env):
             next = self.deck.draw()
             self.info['player'].append(card_labels[next])
             self.player = fsm_hit[self.player, next]
-            done = self.player == Hand.BUST
+            done = self.player == Hand._BUST
         else:
             self.dealer = fsm_hit[Hand.DEAL, self.dealer]
             while True:
