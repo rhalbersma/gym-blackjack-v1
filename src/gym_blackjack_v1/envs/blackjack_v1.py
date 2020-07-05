@@ -291,7 +291,7 @@ class BlackjackEnv(gym.Env):
             raise ValueError(f"Unknown payout type '{type(payout)}'")
         self.dealer_policy = hit_on_soft_17 if dealer_hits_on_soft_17 else stand_on_17
         self.observation_space = spaces.Tuple((
-            spaces.Discrete(len(Hand) - len(Count)),
+            spaces.Discrete(len(Hand)), # only include transient Markov states because absorbing states don't need to be explored
             spaces.Discrete(len(Card))
         ))
         self.action_space = spaces.Discrete(len(Action))
