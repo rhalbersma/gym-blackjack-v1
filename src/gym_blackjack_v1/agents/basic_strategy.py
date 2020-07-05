@@ -17,7 +17,6 @@ class BasicStrategyAgent:
         self.policy[Hand.H17:(Hand.H21 + 1), Card._7:(Card._A + 1)] = Action.s
         self.policy[Hand.S18:(Hand.BJ  + 1), Card._2:(Card._8 + 1)] = Action.s
         self.policy[Hand.S19:(Hand.BJ  + 1), Card._9:(Card._A + 1)] = Action.s
-        self.policy[Hand.BUST,               :                    ] = Action.s
 
         self.observe = {
             'Blackjack-v0': (lambda obs: (Hand[('S' if obs[2] else 'H') + str(obs[0])], Card((obs[1] - 2) % 10))),

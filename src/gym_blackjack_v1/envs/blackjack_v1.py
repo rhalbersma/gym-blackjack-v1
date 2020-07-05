@@ -10,6 +10,9 @@ from gym.utils import seeding
 import numpy as np
 
 class Hand(IntEnum):
+    """
+    All 'live' hands in blackjack (transient Markov states).
+    """
     DEAL =  0
     H2   =  1
     H3   =  2
@@ -48,6 +51,9 @@ class Hand(IntEnum):
 hand_labels = [ h.name for h in Hand ]
 
 class Count(IntEnum):
+    """
+    All 'dead' hands in blackjack (absorbing Markov states).
+    """
     _BUST =  0 # all counts above 21
     _16   =  1 # all counts below 17
     _17   =  2
@@ -57,16 +63,20 @@ class Count(IntEnum):
     _21   =  6
     _BJ   =  7 # 21 with the first 2 cards
 
-count_labels = [
-    c.name[c.name.startswith('_'):]
-    for c in Count
-]
+count_labels = [ c.name for c in Count ]
 
-_offset = Hand.BJ + 1
+class State(IntEnum):
+    """
+    The union of all 'live' and 'dead' hands in blackjack.
+    """
+    pass
+
+for key, value in Hand.__members__.items():
+    extend_enum(State, key, value)
 for key, value in Count.__members__.items():
-    extend_enum(Hand, key, value + _offset)
+    extend_enum(State, key, value + len(Hand))
 
-hand_labels += count_labels
+state_labels = hand_labels + count_labels
 
 class Card(IntEnum):
     _2 =  0
@@ -88,70 +98,68 @@ class Action(IntEnum):
 
 action_labels = [ a.name[0] for a in Action ]
 
-# Finite-state machine for going from one hand to the next after 'hitting' another card.
+# Finite-state machine for going from a hand to the next state after 'hitting' another card.
 fsm_hit = np.zeros((len(Hand), len(Card)), dtype=int)
 
 for _j, _c in enumerate(range(Card._2, Card._T)):
-    fsm_hit[Hand.DEAL, _c] = Hand.H2 + _j
-fsm_hit[Hand.DEAL, Card._T] = Hand.T
-fsm_hit[Hand.DEAL, Card._A] = Hand.A
+    fsm_hit[Hand.DEAL, _c] = State.H2 + _j
+fsm_hit[Hand.DEAL, Card._T] = State.T
+fsm_hit[Hand.DEAL, Card._A] = State.A
 
 for _i, _h in enumerate(range(Hand.H2, Hand.H11)):
     for _j, _c in enumerate(range(Card._2, Card._A)):
         fsm_hit[_h, _c] = _h + 2 + _j
-    fsm_hit[_h, Card._A] = Hand.S13 + _i
+    fsm_hit[_h, Card._A] = State.S13 + _i
 
 for _j, _c in enumerate(range(Card._2, Card._A)):
-    fsm_hit[Hand.H11, _c] = Hand.H13 + _j
-fsm_hit[Hand.H11, Card._A] = Hand.H12
+    fsm_hit[Hand.H11, _c] = State.H13 + _j
+fsm_hit[Hand.H11, Card._A] = State.H12
 
 for _i, _h in enumerate(range(Hand.H12, Hand.H21)):
     for _j, _c in enumerate(range(Card._2, Card._T - _i)):
         fsm_hit[_h, _c] = _h + 2 + _j
-    fsm_hit[_h, (Card._T - _i):Card._A] = Hand._BUST
+    fsm_hit[_h, (Card._T - _i):Card._A] = State._BUST
     fsm_hit[_h, Card._A] = _h + 1
 
-fsm_hit[Hand.H21, :] = Hand._BUST
+fsm_hit[Hand.H21, :] = State._BUST
 
 for _j, _c in enumerate(range(Card._2, Card._A)):
-    fsm_hit[Hand.T, _c] = Hand.H12 + _j
-fsm_hit[Hand.T, Card._A] = Hand.BJ
+    fsm_hit[Hand.T, _c] = State.H12 + _j
+fsm_hit[Hand.T, Card._A] = State.BJ
 
 for _j, _c in enumerate(range(Card._2, Card._T)):
-    fsm_hit[Hand.A, _c] = Hand.S13 + _j
-fsm_hit[Hand.A, Card._T] = Hand.BJ
-fsm_hit[Hand.A, Card._A] = Hand.S12
+    fsm_hit[Hand.A, _c] = State.S13 + _j
+fsm_hit[Hand.A, Card._T] = State.BJ
+fsm_hit[Hand.A, Card._A] = State.S12
 
 for _i, _s in enumerate(range(Hand.S12, Hand.S21)):
     for _j, _c in enumerate(range(Card._2, Card._T - _i)):
         fsm_hit[_s, _c] = _s + 2 + _j
     for _j, _c in enumerate(range(Card._T - _i, Card._A)):
-        fsm_hit[_s, _c] = Hand.H12 + _j
+        fsm_hit[_s, _c] = State.H12 + _j
     fsm_hit[_s, Card._A] = _s + 1
 
 for _c, _j in enumerate(range(Card._2, Card._A)):
-    fsm_hit[Hand.S21, _c] = Hand.H13 + _j
-fsm_hit[Hand.S21, Card._A] = Hand.H12
+    fsm_hit[Hand.S21, _c] = State.H13 + _j
+fsm_hit[Hand.S21, Card._A] = State.H12
 
 fsm_hit[Hand.BJ, :] = fsm_hit[Hand.S21, :]
 
-for _c in range(Hand._BUST, Hand._BJ + 1):
-    fsm_hit[_c, :] = _c
-
-# Finite-state machine for going from one hand to the next after 'standing'.
+# Finite-state machine for going from one hand to the next state after 'standing'.
 fsm_stand = np.zeros(len(Hand), dtype=int)
-fsm_stand[Hand.DEAL:Hand.H17] = Hand._16
+fsm_stand[Hand.DEAL:Hand.H17] = State._16
 for _i, _h in enumerate(range(Hand.H17, Hand.H21 + 1)):
-    fsm_stand[_h] = Hand._17 + _i
-fsm_stand[Hand.T:Hand.S17] = Hand._16
+    fsm_stand[_h] = State._17 + _i
+fsm_stand[Hand.T:Hand.S17] = State._16
 for _i, _s in enumerate(range(Hand.S17, Hand.S21 + 1)):
-    fsm_stand[_s] = Hand._17 + _i
-fsm_stand[Hand.BJ] = Hand._BJ
-for _c in range(Hand._BUST, Hand._BJ + 1):
-    fsm_stand[_c: ] = _c
+    fsm_stand[_s] = State._17 + _i
+fsm_stand[Hand.BJ] = State._BJ
 
 # Map a Hand to a Count
-count = fsm_stand - _offset
+count = np.zeros(len(State), dtype=int)
+count[:len(Hand)] = fsm_stand - len(Hand)
+for _s in range(State._BUST, State._BJ + 1):
+    count[_s] = _s - len(Hand)
 
 # Policy for a dealer who stands on 17.
 stand_on_17 = np.full(len(Hand), Action.h)
@@ -159,7 +167,7 @@ stand_on_17 = np.full(len(Hand), Action.h)
 for _h in range(Hand.H17, Hand.H21 + 1):
     stand_on_17[_h] = Action.s
 
-for _s in range(Hand.S17, Hand._BJ + 1):
+for _s in range(Hand.S17, Hand.BJ + 1):
     stand_on_17[_s] = Action.s
 
 # Policy for a dealer who hits on soft 17.
@@ -297,13 +305,13 @@ class BlackjackEnv(gym.Env):
         return [seed]
 
     def render(self, mode='human'):
-        p = hand_labels[self.player]
+        p = state_labels[self.player]
         upcard_only = self.dealer in range(Card._2, Card._A + 1)
-        if self.player != Hand._BUST and upcard_only:
+        if self.player != State._BUST and upcard_only:
             d = card_labels[self.dealer]
             return f'player: {p:>4}; dealer: {d:>4};'
         else:
-            d = hand_labels[fsm_hit[Hand.DEAL, self.dealer] if upcard_only else self.dealer]
+            d = state_labels[fsm_hit[State.DEAL, self.dealer] if upcard_only else self.dealer]
             R = self.payout[count[self.player], count[self.dealer]]
             return f'player: {p:>4}; dealer: {d:>4}; reward: {R:>+4}'
 
@@ -347,14 +355,14 @@ class BlackjackEnv(gym.Env):
             next = self.deck.draw()
             self.info['player'].append(card_labels[next])
             self.player = fsm_hit[self.player, next]
-            done = self.player == Hand._BUST
+            done = self.player == State._BUST
         else:
             self.dealer = fsm_hit[Hand.DEAL, self.dealer]
             while True:
                 next = self.deck.draw()
                 self.info['dealer'].append(card_labels[next])
                 self.dealer = fsm_hit[self.dealer, next]
-                if not self.dealer_policy[self.dealer]:
+                if self.dealer == State._BUST or not self.dealer_policy[self.dealer]:
                     break
             done = True
         reward = self.payout[count[self.player], count[self.dealer]] if done else 0.
