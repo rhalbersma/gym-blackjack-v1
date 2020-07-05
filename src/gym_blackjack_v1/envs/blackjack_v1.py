@@ -3,13 +3,13 @@
 #    (See accompanying file LICENSE_1_0.txt or copy at
 #          http://www.boost.org/LICENSE_1_0.txt)
 
-from enum import IntEnum
+from aenum import IntEnum, extend_enum
 import gym
 from gym import spaces
 from gym.utils import seeding
 import numpy as np
 
-class State(IntEnum):
+class Hand(IntEnum):
     DEAL =  0
     H2   =  1
     H3   =  2
@@ -43,10 +43,30 @@ class State(IntEnum):
     S19  = 30
     S20  = 31
     S21  = 32
-    BJ   = 33
-    BUST = 34
+    AT   = 33
 
-state_labels = [ s.name for s in State ]
+hand_labels = [ h.name for h in Hand ]
+
+class Count(IntEnum):
+    BUST =  0 # all counts above 21
+    _16  =  1 # all counts below 17
+    _17  =  2
+    _18  =  3
+    _19  =  4
+    _20  =  5
+    _21  =  6
+    BJ   =  7 # 21 with the first 2 cards
+
+count_labels = [
+    c.name[c.name.startswith('_'):]
+    for c in Count
+]
+
+_offset = Hand.AT + 1
+for key, value in Count.__members__.items():
+    extend_enum(Hand, key, value + _offset)
+
+hand_labels += count_labels
 
 class Card(IntEnum):
     _2 =  0
@@ -68,117 +88,106 @@ class Action(IntEnum):
 
 action_labels = [ a.name[0] for a in Action ]
 
-# Finite-state machine for going from one state to the next after drawing a card
-fsm = np.zeros((len(State), len(Card)), dtype=int)
+# Finite-state machine for going from one hand to the next after 'hitting' another card.
+fsm_hit = np.zeros((len(Hand), len(Card)), dtype=int)
 
 for _j, _c in enumerate(range(Card._2, Card._T)):
-    fsm[State.DEAL, _c] = State.H2 + _j
-fsm[State.DEAL, Card._T] = State.T
-fsm[State.DEAL, Card._A] = State.A
+    fsm_hit[Hand.DEAL, _c] = Hand.H2 + _j
+fsm_hit[Hand.DEAL, Card._T] = Hand.T
+fsm_hit[Hand.DEAL, Card._A] = Hand.A
 
-for _i, _h in enumerate(range(State.H2, State.H11)):
+for _i, _h in enumerate(range(Hand.H2, Hand.H11)):
     for _j, _c in enumerate(range(Card._2, Card._A)):
-        fsm[_h, _c] = _h + 2 + _j
-    fsm[_h, Card._A] = State.S13 + _i
+        fsm_hit[_h, _c] = _h + 2 + _j
+    fsm_hit[_h, Card._A] = Hand.S13 + _i
 
 for _j, _c in enumerate(range(Card._2, Card._A)):
-    fsm[State.H11, _c] = State.H13 + _j
-fsm[State.H11, Card._A] = State.H12
+    fsm_hit[Hand.H11, _c] = Hand.H13 + _j
+fsm_hit[Hand.H11, Card._A] = Hand.H12
 
-for _i, _h in enumerate(range(State.H12, State.H21)):
+for _i, _h in enumerate(range(Hand.H12, Hand.H21)):
     for _j, _c in enumerate(range(Card._2, Card._T - _i)):
-        fsm[_h, _c] = _h + 2 + _j
-    fsm[_h, (Card._T - _i):Card._A] = State.BUST
-    fsm[_h, Card._A] = _h + 1
+        fsm_hit[_h, _c] = _h + 2 + _j
+    fsm_hit[_h, (Card._T - _i):Card._A] = Hand.BUST
+    fsm_hit[_h, Card._A] = _h + 1
 
-fsm[State.H21, :] = State.BUST
+fsm_hit[Hand.H21, :] = Hand.BUST
 
 for _j, _c in enumerate(range(Card._2, Card._A)):
-    fsm[State.T, _c] = State.H12 + _j
-fsm[State.T, Card._A] = State.BJ
+    fsm_hit[Hand.T, _c] = Hand.H12 + _j
+fsm_hit[Hand.T, Card._A] = Hand.AT
 
 for _j, _c in enumerate(range(Card._2, Card._T)):
-    fsm[State.A, _c] = State.S13 + _j
-fsm[State.A, Card._T] = State.BJ
-fsm[State.A, Card._A] = State.S12
+    fsm_hit[Hand.A, _c] = Hand.S13 + _j
+fsm_hit[Hand.A, Card._T] = Hand.AT
+fsm_hit[Hand.A, Card._A] = Hand.S12
 
-for _i, _s in enumerate(range(State.S12, State.S21)):
+for _i, _s in enumerate(range(Hand.S12, Hand.S21)):
     for _j, _c in enumerate(range(Card._2, Card._T - _i)):
-        fsm[_s, _c] = _s + 2 + _j
+        fsm_hit[_s, _c] = _s + 2 + _j
     for _j, _c in enumerate(range(Card._T - _i, Card._A)):
-        fsm[_s, _c] = State.H12 + _j
-    fsm[_s, Card._A] = _s + 1
+        fsm_hit[_s, _c] = Hand.H12 + _j
+    fsm_hit[_s, Card._A] = _s + 1
 
 for _c, _j in enumerate(range(Card._2, Card._A)):
-    fsm[State.S21, _c] = State.H13 + _j
-fsm[State.S21, Card._A] = State.H12
+    fsm_hit[Hand.S21, _c] = Hand.H13 + _j
+fsm_hit[Hand.S21, Card._A] = Hand.H12
 
-fsm[State.BJ,   :] = fsm[State.S21, :]
-fsm[State.BUST, :] = State.BUST
+fsm_hit[Hand.AT,   :] = fsm_hit[Hand.S21, :]
 
-# Finite-state machine for a dealer who has to hit on soft 17
-hit_on_soft_17 = fsm.copy()
+for _c in range(Hand.BUST, Hand.BJ + 1):
+    fsm_hit[_c, :] = _c
 
-for _h in range(State.H17, State.H21 + 1):
-    hit_on_soft_17[_h, :] = _h
+# Finite-state machine for going from one hand to the next after 'standing'.
+fsm_stand = np.zeros(len(Hand), dtype=int)
+fsm_stand[Hand.DEAL:Hand.H17] = Hand._16
+for _i, _h in enumerate(range(Hand.H17, Hand.H21 + 1)):
+    fsm_stand[_h] = Hand._17 + _i
+fsm_stand[Hand.T:Hand.S17] = Hand._16
+for _i, _s in enumerate(range(Hand.S17, Hand.S21 + 1)):
+    fsm_stand[_s] = Hand._17 + _i
+fsm_stand[Hand.AT] = Hand.BJ
+for _c in range(Hand.BUST, Hand.BJ + 1):
+    fsm_stand[_c: ] = _c
 
-for _s in range(State.S18, State.BJ + 1):
-    hit_on_soft_17[_s, :] = _s
+# Map a Hand to a Count
+count = fsm_stand - _offset
 
-# Finite-state machine for a dealer who has to stand on 17
-stand_on_17 = hit_on_soft_17.copy()
-stand_on_17[State.S17, :] = State.S17
+# Policy for a dealer who stands on 17.
+stand_on_17 = np.full(len(Hand), Action.h)
 
-# Terminal states
-class Terminal(IntEnum):
-    _BUST =  0 # all counts above 21
-    _16   =  1 # all counts below 17
-    _17   =  2
-    _18   =  3
-    _19   =  4
-    _20   =  5
-    _21   =  6
-    _BJ   =  7 # 21 with the first 2 cards
+for _h in range(Hand.H17, Hand.H21 + 1):
+    stand_on_17[_h] = Action.s
 
-terminal_labels = [ t.name[1:] for t in Terminal ]
+for _s in range(Hand.S17, Hand.BJ + 1):
+    stand_on_17[_s] = Action.s
 
-# Transition matrix to terminal states when standing
-score = np.zeros(len(State), dtype=int)
-
-score[State.BUST          ] = Terminal._BUST
-score[State.DEAL:State.H17] = Terminal._16
-score[State.T   :State.S17] = Terminal._16
-
-for _i, _h in enumerate(range(State.H17, State.H21 + 1)):
-    score[_h] = Terminal._17 + _i
-
-for _i, _s in enumerate(range(State.S17, State.S21 + 1)):
-    score[_s] = Terminal._17 + _i
-
-score[State.BJ] = Terminal._BJ
+# Policy for a dealer who hits on soft 17.
+hit_on_soft_17 = stand_on_17.copy()
+hit_on_soft_17[Hand.S17] = Action.h
 
 # The payout structure as specified in Sutton and Barto.
-_sutton_barto = np.zeros((len(Terminal), len(Terminal)))    # The player and dealer have equal scores.
-_sutton_barto[Terminal._BUST, :             ]       = -1.   # The player busts regardless of whether the dealer busts.
-_sutton_barto[Terminal._16: , Terminal._BUST]       = +1.   # The dealer busts and the player doesn't.
-_sutton_barto[np.tril_indices(len(Terminal), k=-1)] = +1.   # The player scores higher than the dealer.
-_sutton_barto[np.triu_indices(len(Terminal), k=+1)] = -1.   # The dealer scores higher than the player.
+_sutton_barto = np.zeros((len(Count), len(Count)))      # The player and dealer have equal scores.
+_sutton_barto[Count.BUST, :         ]            = -1.  # The player busts regardless of whether the dealer busts.
+_sutton_barto[Count._16:, Count.BUST]            = +1.  # The dealer busts and the player doesn't.
+_sutton_barto[np.tril_indices(len(Count), k=-1)] = +1.  # The player scores higher than the dealer.
+_sutton_barto[np.triu_indices(len(Count), k=+1)] = -1.  # The dealer scores higher than the player.
 
 # The payout structure as specified in the default Blackjack-v0 environment with natural=False.
 # Note: in contrast to Sutton and Barto, blackjack is considered equivalent to 21.
 _blackjack_v0 = _sutton_barto.copy()
-_blackjack_v0[Terminal._BJ, Terminal._21]           =  0.   # A player's blackjack and a dealer's 21 are treated equally.
-_blackjack_v0[Terminal._21, Terminal._BJ]           =  0.   # A player's 21 and a dealer's blackjack are treated equally.
+_blackjack_v0[Count.BJ , Count._21]              =  0.  # A player's blackjack and a dealer's 21 are treated equally.
+_blackjack_v0[Count._21, Count.BJ]               =  0.  # A player's 21 and a dealer's blackjack are treated equally.
 
 # The payout structure as specified in the alternative Blackjack-v0 environment with natural=True.
 # Note: in contrast to Sutton and Barto, blackjack is considered equivalent to 21.
 _blackjack_v0_natural = _blackjack_v0.copy()
-_blackjack_v0_natural[Terminal._BJ, :Terminal._21]   = +1.5 # A player's winning blackjack pays 1.5 times the original bet.
+_blackjack_v0_natural[Count.BJ, :Count._21]      = +1.5 # A player's winning blackjack pays 1.5 times the original bet.
 
 # The typical casino payout structure as specified in E.O. Thorp, "Beat the Dealer" (1966).
 # https://www.amazon.com/gp/product/B004G5ZTZQ/
 _thorp = _sutton_barto.copy()
-_thorp[Terminal._BJ, :Terminal._BJ]                  = +1.5 # A player's winning blackjack pays 1.5 times the original bet.
+_thorp[Count.BJ, :Count.BJ]                      = +1.5 # A player's winning blackjack pays 1.5 times the original bet.
 
 class InfiniteDeck:
     """
@@ -212,8 +221,8 @@ class BlackjackEnv(gym.Env):
         Face cards count as 10, and an ace can count as either 1 ('hard') or 11 ('soft').
 
     Observations:
-        There are 35 * 10 = 350 discrete states:
-            35 player counts (DEAL, H2-H21, T, A, S12-S21, BJ, BUST)
+        There are 34 * 10 = 340 discrete states:
+            34 player counts (DEAL, H2-H21, T, A, S12-S21, AT)
             10 dealer cards showing (2-9, T, A)
 
     Actions:
@@ -258,7 +267,7 @@ class BlackjackEnv(gym.Env):
         """
         if payout is None:
             self.payout = _sutton_barto
-        elif isinstance(payout, np.ndarray) and payout.shape == (len(Terminal), len(Terminal)) and payout.dtype.name.startswith('float'):
+        elif isinstance(payout, np.ndarray) and payout.shape == (len(Count), len(Count)) and payout.dtype.name.startswith('float'):
             self.payout = payout
         elif isinstance(payout, str):
             try:
@@ -272,17 +281,9 @@ class BlackjackEnv(gym.Env):
                 raise ValueError(f"Unknown payout name '{payout}'")
         else:
             raise ValueError(f"Unknown payout type '{type(payout)}'")
-        terminal_states = lambda fsm: {
-            state
-            for state, successors in enumerate(fsm)
-            if (successors == state).all()
-        }
-        self.player_fsm = fsm
-        self.player_terminal = terminal_states(self.player_fsm)
-        self.dealer_fsm = hit_on_soft_17 if dealer_hits_on_soft_17 else stand_on_17
-        self.dealer_terminal = terminal_states(self.dealer_fsm)
+        self.dealer_policy = hit_on_soft_17 if dealer_hits_on_soft_17 else stand_on_17
         self.observation_space = spaces.Tuple((
-            spaces.Discrete(len(State)),
+            spaces.Discrete(len(Hand) - len(Count)),
             spaces.Discrete(len(Card))
         ))
         self.action_space = spaces.Discrete(len(Action))
@@ -296,14 +297,14 @@ class BlackjackEnv(gym.Env):
         return [seed]
 
     def render(self, mode='human'):
-        p = state_labels[self.player]
+        p = hand_labels[self.player]
         upcard_only = self.dealer in range(Card._2, Card._A + 1)
-        if self.player not in self.player_terminal and upcard_only:
+        if self.player != Hand.BUST and upcard_only:
             d = card_labels[self.dealer]
             return f'player: {p:>4}; dealer: {d:>4};'
         else:
-            d = state_labels[self.dealer_fsm[State.DEAL, self.dealer] if upcard_only else self.dealer]
-            R = self.payout[score[self.player], score[self.dealer]]
+            d = hand_labels[fsm_hit[Hand.DEAL, self.dealer] if upcard_only else self.dealer]
+            R = self.payout[count[self.player], count[self.dealer]]
             return f'player: {p:>4}; dealer: {d:>4}; reward: {R:>+4}'
 
     def _get_obs(self):
@@ -314,14 +315,14 @@ class BlackjackEnv(gym.Env):
         Reset the state of the environment by drawing two player cards and one dealer card.
 
         Returns:
-            observation (object): the player's count and the dealer's upcard.
+            observation (object): the player's hand and the dealer's upcard.
 
         Notes:
             Cards are drawn from a single deck with replacement (i.e. from an infinite deck).
         """
         p1, p2, up = self.deck.deal()
         self.info = { 'player': [ card_labels[p1], card_labels[p2] ], 'dealer': [ card_labels[up] ] }
-        self.player, self.dealer = self.player_fsm[self.player_fsm[State.DEAL, p1], p2], up
+        self.player, self.dealer = fsm_hit[fsm_hit[Hand.DEAL, p1], p2], up
         return self._get_obs()
 
     def explore(self, start):
@@ -342,22 +343,19 @@ class BlackjackEnv(gym.Env):
         return self._get_obs()
 
     def step(self, action):
-        if action == Action.h:
+        if action:
             next = self.deck.draw()
             self.info['player'].append(card_labels[next])
-            self.player = self.player_fsm[self.player, next]
-            done = self.player in self.player_terminal
+            self.player = fsm_hit[self.player, next]
+            done = self.player == Hand.BUST
         else:
-            # Monte Carlo Exploring Starts will periodically sample the player's bust state.
-            # In that case, the dealer should not draw additional cards that could bust him.
-            if self.player not in self.player_terminal:
-                self.dealer = self.dealer_fsm[State.DEAL, self.dealer]
-                while True:
-                    next = self.deck.draw()
-                    self.info['dealer'].append(card_labels[next])
-                    self.dealer = self.dealer_fsm[self.dealer, next]
-                    if self.dealer in self.dealer_terminal:
-                        break
+            self.dealer = fsm_hit[Hand.DEAL, self.dealer]
+            while True:
+                next = self.deck.draw()
+                self.info['dealer'].append(card_labels[next])
+                self.dealer = fsm_hit[self.dealer, next]
+                if not self.dealer_policy[self.dealer]:
+                    break
             done = True
-        reward = self.payout[score[self.player], score[self.dealer]] if done else 0.
+        reward = self.payout[count[self.player], count[self.dealer]] if done else 0.
         return self._get_obs(), reward, done, self.info
