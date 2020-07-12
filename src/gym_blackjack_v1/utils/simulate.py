@@ -15,7 +15,7 @@ def simulate(agent, env, episodes=10**6):
     Args:
         agent (object): an agent with an act(obs, reward, done) method.
         env (object): an OpenAI Gym environment.
-        episodes (int): the number of episodes to simulate (default: 1,000,000).
+        episodes (int): the number of episodes to simulate. Defaults to 1,000,000.
 
     Returns:
         A DescrStatsW object with the episodic reward distribution.

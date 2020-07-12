@@ -21,15 +21,15 @@ def play(env, episodes=100, hint=False):
 
     Args:
         env (object): an OpenAI Gym blackjack environment, either 'Blackjack-v0' or 'Blackjack-v1'.
-        episodes (int): the number of episodes to play (default: 100).
-        hint (bool): whether to show the Basic Strategy (Thorp, 1966) as a hint (default: False).
+        episodes (int): the number of episodes to play. Defaults to 100.
+        hint (bool): whether to show the Basic Strategy (Thorp, 1966) as a hint. Defaults to False.
 
     Returns:
         The average reward per episode.
 
     Notes:
         The user can input either 0/1 or s/h (for stand/hit) as actions.
-        If no valid input is entered, the default is either 0 (if hint=False) or the basic strategy (if hint=True).
+        If no valid input is entered, the default action is either 0 (if hint=False) or the basic strategy (if hint=True).
     """
     if hint:
         agent = BasicStrategyAgent(env)

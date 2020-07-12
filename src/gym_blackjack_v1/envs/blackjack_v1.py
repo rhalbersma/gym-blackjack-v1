@@ -63,7 +63,7 @@ class Count(IntEnum):
     _21   =  6
     _BJ   =  7 # 21 with the first 2 cards
 
-count_labels = [ c.name for c in Count ]
+count_labels = [ c.name[1:] for c in Count ]
 
 class State(IntEnum):
     """
@@ -147,27 +147,27 @@ fsm_hit[Hand.S21, Card._A] = State.H12
 fsm_hit[Hand.BJ, :] = fsm_hit[Hand.S21, :]
 
 # Finite-state machine for going from one hand to the next state after 'standing'.
-fsm_stand = np.zeros((len(Hand), 1), dtype=int)
+fsm_stand = np.zeros(len(Hand), dtype=int)
 
-fsm_stand[Hand.DEAL:Hand.H17, :] = State._16
+fsm_stand[Hand.DEAL:Hand.H17] = State._16
 
 for _i, _h in enumerate(range(Hand.H17, Hand.H21 + 1)):
-    fsm_stand[_h, :] = State._17 + _i
-fsm_stand[Hand.T:Hand.S17, :] = State._16
+    fsm_stand[_h] = State._17 + _i
+fsm_stand[Hand.T:Hand.S17] = State._16
 
 for _i, _s in enumerate(range(Hand.S17, Hand.S21 + 1)):
-    fsm_stand[_s, :] = State._17 + _i
-fsm_stand[Hand.BJ, :] = State._BJ
+    fsm_stand[_s] = State._17 + _i
+fsm_stand[Hand.BJ] = State._BJ
 
 # Map a Hand to a Count
 count = np.zeros(len(State), dtype=int)
 
-count[:len(Hand)] = fsm_stand[:, 0] - len(Hand)
+count[:len(Hand)] = fsm_stand - len(Hand)
 
 for _s in range(State._BUST, State._BJ + 1):
     count[_s] = _s - len(Hand)
 
-# Policy for a dealer who stands on 17.
+# Deterministic policy for a dealer who stands on 17.
 stand_on_17 = np.full(len(Hand), Action.h)
 
 for _h in range(Hand.H17, Hand.H21 + 1):
@@ -176,32 +176,9 @@ for _h in range(Hand.H17, Hand.H21 + 1):
 for _s in range(Hand.S17, Hand.BJ + 1):
     stand_on_17[_s] = Action.s
 
-# Policy for a dealer who hits on soft 17.
+# Deterministic policy for a dealer who hits on soft 17.
 hit_on_soft_17 = stand_on_17.copy()
 hit_on_soft_17[Hand.S17] = Action.h
-
-# The payout structure as specified in Sutton and Barto.
-_sutton_barto = np.zeros((len(Count), len(Count)))      # The player and dealer have equal scores.
-_sutton_barto[Count._BUST, :         ]           = -1.  # The player busts regardless of whether the dealer busts.
-_sutton_barto[Count._16:, Count._BUST]           = +1.  # The dealer busts and the player doesn't.
-_sutton_barto[np.tril_indices(len(Count), k=-1)] = +1.  # The player scores higher than the dealer.
-_sutton_barto[np.triu_indices(len(Count), k=+1)] = -1.  # The dealer scores higher than the player.
-
-# The payout structure as specified in the default Blackjack-v0 environment with natural=False.
-# Note: in contrast to Sutton and Barto, blackjack is considered equivalent to 21.
-_blackjack_v0 = _sutton_barto.copy()
-_blackjack_v0[Count._BJ, Count._21]              =  0.  # A player's blackjack and a dealer's 21 are treated equally.
-_blackjack_v0[Count._21, Count._BJ]              =  0.  # A player's 21 and a dealer's blackjack are treated equally.
-
-# The payout structure as specified in the alternative Blackjack-v0 environment with natural=True.
-# Note: in contrast to Sutton and Barto, blackjack is considered equivalent to 21.
-_blackjack_v0_natural = _blackjack_v0.copy()
-_blackjack_v0_natural[Count._BJ, :Count._21]     = +1.5 # A player's winning blackjack pays 1.5 times the original bet.
-
-# The typical casino payout structure as specified in E.O. Thorp, "Beat the Dealer" (1966).
-# https://www.amazon.com/gp/product/B004G5ZTZQ/
-_thorp = _sutton_barto.copy()
-_thorp[Count._BJ, :Count._BJ]                    = +1.5 # A player's winning blackjack pays 1.5 times the original bet.
 
 class InfiniteDeck:
     """
@@ -260,41 +237,31 @@ class BlackjackEnv(gym.Env):
 
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, payout=None, dealer_hits_on_soft_17=False, deck=InfiniteDeck):
+    def __init__(self, winning_blackjack=1., blackjack_beats_21=True, dealer_hits_on_soft_17=False, deck=InfiniteDeck):
         """
         Initialize the state of the environment.
 
         Args:
-            payout (None, str or an 8x8 NumPy matrix): the game's payout structure.
-                If payout is None or 'sutton-barto', blackjack beats 21 and a player's winning blackjack pays out +1.0.
-                If payout is 'blackjack-v0', same as above, but a blackjack ties with 21.
-                If payout is 'blackjack-v0-natural', same as above, but a player's winning blackjack pays out +1.5.
-                If payout is 'thorp', same as 'sutton-barto', but a player's winning blackjack pays out +1.5.
-            dealer_hits_on_soft (bool): whether the dealer stands or hits on soft 17.
-            debug (bool): whether the environment keeps track of the cards received by the player and the dealer.
+            winning_blackjack (float): how much a winning blackjack pays out. Defaults to 1.0.
+            blackjack_beats_21 (bool): whether a blackjack (21 on the first two cards) beats a regular 21. Defaults to True.
+            dealer_hits_on_soft (bool): whether the dealer stands or hits on soft 17. Defaults to False.
+            deck (object): the class name of the deck. Defaults to 'InfiniteDeck'.
 
         Notes:
-            'suttton-barto' is described in Sutton and Barto's "Reinforcement Learning" (2018).
-            'blackjack-v0' is implemented in the OpenAI Gym environment 'Blackjack-v0'.
-            'blackjack-v0-natural' is obtained from 'Blackjack-v0' initialized with natural=True.
-            'thorp' is described in E.O. Thorp's "Beat the Dealer" (1966).
+            The default arguments correspond to Sutton and Barto's 'Reinforcement Learning' (2018).
+            blackjack_beats_21=False corresponds to the OpenAI Gym environment 'Blackjack-v0'.
+            blackjack_beats_21=False with winning_blackjack=1.5 correponds to 'Blackjack-v0' initialized with natural=True.
+            Casinos usually have winning_blackjack=1.5. Sometimes winning_blackjack=1.2 and/or dealer_hits_on_soft_17=True.
         """
-        if payout is None:
-            self.payout = _sutton_barto
-        elif isinstance(payout, np.ndarray) and payout.shape == (len(Count), len(Count)) and payout.dtype.name.startswith('float'):
-            self.payout = payout
-        elif isinstance(payout, str):
-            try:
-                self.payout = {
-                    'sutton-barto'          : _sutton_barto,
-                    'blackjack-v0'          : _blackjack_v0,
-                    'blackjack-v0-natural'  : _blackjack_v0_natural,
-                    'thorp'                 : _thorp
-                }[payout.lower()]   # Handle mixed-case spelling.
-            except KeyError:
-                raise ValueError(f"Unknown payout name '{payout}'")
-        else:
-            raise ValueError(f"Unknown payout type '{type(payout)}'")
+        self.payout = np.zeros((len(Count), len(Count)))      # The player and dealer have equal scores.
+        self.payout[Count._BUST, :          ]          = -1.  # The player busts regardless of whether the dealer busts.
+        self.payout[Count._16:,  Count._BUST]          = +1.  # The dealer busts and the player doesn't.
+        self.payout[np.tril_indices(len(Count), k=-1)] = +1.  # The player scores higher than the dealer.
+        self.payout[np.triu_indices(len(Count), k=+1)] = -1.  # The dealer scores higher than the player.
+        self.payout[Count._BJ,   :Count._BJ ]          = winning_blackjack
+        if not blackjack_beats_21:
+            self.payout[Count._BJ, Count._21]          =  0.  # A player's blackjack and a dealer's 21 are treated equally.
+            self.payout[Count._21, Count._BJ]          =  0.  # A player's 21 and a dealer's blackjack are treated equally.
         self.dealer_policy = hit_on_soft_17 if dealer_hits_on_soft_17 else stand_on_17
         self.observation_space = spaces.Tuple((
             spaces.Discrete(len(Hand)), # only include transient Markov states because absorbing states don't need to be explored
@@ -358,16 +325,16 @@ class BlackjackEnv(gym.Env):
 
     def step(self, action):
         if action:
-            next = self.deck.draw()
-            self.info['player'].append(card_labels[next])
-            self.player = fsm_hit[self.player, next]
+            card = self.deck.draw()
+            self.info['player'].append(card_labels[card])
+            self.player = fsm_hit[self.player, card]
             done = self.player == State._BUST
         else:
             self.dealer = fsm_hit[Hand.DEAL, self.dealer]
             while True:
-                next = self.deck.draw()
-                self.info['dealer'].append(card_labels[next])
-                self.dealer = fsm_hit[self.dealer, next]
+                card = self.deck.draw()
+                self.info['dealer'].append(card_labels[card])
+                self.dealer = fsm_hit[self.dealer, card]
                 if self.dealer == State._BUST or not self.dealer_policy[self.dealer]:
                     break
             done = True
