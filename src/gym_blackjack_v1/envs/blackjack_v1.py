@@ -324,7 +324,7 @@ class BlackjackEnv(gym.Env):
 
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, winning_blackjack=+1., blackjack_beats_21=True, dealer_hits_on_soft_17=False, deck=InfiniteDeck, model_free=True):
+    def __init__(self, winning_blackjack=+1., blackjack_beats_21=True, dealer_hits_on_soft_17=False, deck=InfiniteDeck, model_based=False):
         """
         Initialize the state of the environment.
 
@@ -359,7 +359,7 @@ class BlackjackEnv(gym.Env):
         self.seed()
         self.deck = deck(self.np_random)
 
-        if not model_free:
+        if model_based:
             self.state_space = spaces.Tuple((
                 spaces.Discrete(len(Player)),                   # Include all transient and absorbing Markov states.
                 spaces.Discrete(len(Dealer))
