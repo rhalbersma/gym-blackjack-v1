@@ -8,6 +8,11 @@ import gym
 from gym import spaces
 from gym.utils import seeding
 import numpy as np
+import pandas as pd
+
+################################################################################
+# Enumerating the state and action spaces
+################################################################################
 
 class Hand(IntEnum):
     DEAL =  0
@@ -83,10 +88,8 @@ class Player(IntEnum):
 
 for key, value in Hand.__members__.items():
     extend_enum(Player, key, value)
-
 for key, value in Count.__members__.items():
     extend_enum(Player, key, value + len(Hand))
-
 for key, value in Terminal.__members__.items():
     extend_enum(Player, key, value + len(Hand) + len(Count))
 
@@ -97,7 +100,6 @@ class Dealer(IntEnum):
 
 for key, value in Card.__members__.items():
     extend_enum(Dealer, key, value)
-
 for key, value in Terminal.__members__.items():
     extend_enum(Dealer, key, value + len(Card))
 
@@ -109,7 +111,16 @@ class Action(IntEnum):
 
 action_labels = [ a.name[0] for a in Action ]
 
-# Finite-state machine for going from a state to the next state after 'hitting' another card.
+################################################################################
+# We factor all transition logic into a finite-state machine (FSM) lookup table.
+# Note that this is model-free RL because there are no explicit probabilities.
+#
+# The FSM approach has two main benefits:
+# 1) it speeds up the model-free version of the BlackjackEnv class;
+# 2) it is straightforward to extend to a model-based version.
+################################################################################
+
+# Going from a state to the next state after 'hitting' another card.
 fsm_hit = np.zeros((len(Player), len(Card)), dtype=int)
 
 for _j, _c in enumerate(range(Card._2, Card._T)):
@@ -158,7 +169,7 @@ fsm_hit[Player.BJ, :] = fsm_hit[Player.S21, :]
 
 fsm_hit[Player._BUST:, :] = Player._END
 
-# Finite-state machine for going from one state to the next state after 'standing'.
+# Going from one state to the next state after 'standing'.
 fsm_stand = np.zeros(len(Player), dtype=int)
 
 fsm_stand[:Player.H17] = Player._16
@@ -173,12 +184,19 @@ fsm_stand[Player.BJ] = Player._BJ
 
 fsm_stand[Player._BUST:] = Player._END
 
-# Map a Hand to a Count
+# Going from a Hand to a Count.
 count = np.zeros(len(Player), dtype=int)
+
 count[:len(Hand)] = fsm_stand[:len(Hand)] - len(Hand)
+
 for _s in range(Player._BUST, Player._BJ + 1):
     count[_s] = _s - len(Hand)
+
 count[Player._END] = count[Player._BUST]
+
+################################################################################
+# Dealer policies
+################################################################################
 
 # Deterministic policy for a dealer who stands on 17.
 stand_on_17 = np.full(len(Hand), Action.h)
@@ -192,6 +210,10 @@ for _s in range(Hand.S17, Hand.BJ + 1):
 # Deterministic policy for a dealer who hits on soft 17.
 hit_on_soft_17 = stand_on_17.copy()
 hit_on_soft_17[Hand.S17] = Action.h
+
+################################################################################
+# The deck of cards
+################################################################################
 
 class InfiniteDeck:
     """
@@ -212,6 +234,58 @@ class InfiniteDeck:
         Draw two player cards and one dealer card.
         """
         return self.draw(), self.draw(), self.draw()
+
+################################################################################
+# Blackjack with an InfiniteDeck is a Markov Decision Problem (MDP).
+# We can construct a full model for this environment through the definition of
+# prob_s_a_r_s = a rank-4 tensor containing the probabilities of starting with
+# state s, applying action a, receiving reward r and transitioning to state s'.
+################################################################################
+
+# Card probabilities for an InfiniteDeck
+prob = np.ones((len(Card))) / 13.
+prob[Card._T] *= 4.  # 10, J, Q, K all count as T
+assert np.isclose(prob.sum(), 1.)
+
+# Transition probabilities from a finite-state machine
+
+def player_card_transitions(fsm):
+    prob_p_p = np.zeros((len(Player), len(Player)))
+    for p0, successors in enumerate(fsm):
+        for card, p1 in enumerate(successors):
+            prob_p_p[p0, p1] += prob[card]
+    assert np.isclose(prob_p_p.sum(axis=-1), 1.).all()
+    return prob_p_p
+
+def player_action_transitions(fsm):
+    prob_p_a_p = np.zeros((len(Player), len(Action), len(Player)))
+    for a in Action:
+        prob_p_a_p[:, a, :] = player_card_transitions(fsm[a])
+    assert np.isclose(prob_p_a_p.sum(axis=-1), 1.).all()
+    return prob_p_a_p
+
+def upcard_hand_transitions(fsm):
+    prob_uc_h = np.zeros((len(Card), len(Hand)))
+    for card in range(len(Card)):
+        player = fsm[Player.DEAL, card]
+        prob_uc_h[card, player] = 1.
+    assert np.isclose(prob_uc_h.sum(axis=-1), 1.).all()
+    return prob_uc_h
+
+fsm = np.array([ a for a in np.broadcast_arrays(fsm_stand.reshape(-1,1), fsm_hit) ])
+prob_p_a_p = player_action_transitions(fsm)
+prob_uc_h = upcard_hand_transitions(fsm[Action.h])
+
+def one_hot_policy(policy):
+    one_hot = np.zeros((policy.size, policy.max() + 1), dtype=int)
+    one_hot[np.arange(policy.size), policy] = 1
+    return one_hot
+
+id_t = np.identity(len(Player) - len(Terminal))
+
+################################################################################
+# Environment
+################################################################################
 
 class BlackjackEnv(gym.Env):
     """
@@ -237,53 +311,92 @@ class BlackjackEnv(gym.Env):
         doubling down, splitting or surrendering, are not supported.
 
     Rewards:
-        There are 3 rewards for the player:
+        There are up to 4 rewards for the player:
             -1. : the player busted, regardless of the dealer,
                 or the player's total is lower than the dealer's,
-                or the dealer has a blackjack and the player doesn't.
-             0. : the player's total is equal to the dealer's.
+                or the dealer has a blackjack and the player doesn't;
+             0. : the player's total is equal to the dealer's;
             +1. : the player's total is higher than the dealer's,
-                or the dealer busted and the player didn't,
-                or the player has a blackjack and the dealer doesn't
-                (in casino play, this pays out +1.5 to the player).
+                or the dealer busted and the player didn't;
+            +1.5: the player has a blackjack and the dealer doesn't.
+                (in Sutton and Barto, this pays out +1. to the player).
     """
 
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, winning_blackjack=1., blackjack_beats_21=True, dealer_hits_on_soft_17=False, deck=InfiniteDeck):
+    def __init__(self, winning_blackjack=+1., blackjack_beats_21=True, dealer_hits_on_soft_17=False, deck=InfiniteDeck, model_free=True):
         """
         Initialize the state of the environment.
 
         Args:
-            winning_blackjack (float): how much a winning blackjack pays out. Defaults to 1.0.
+            winning_blackjack (float): how much a winning blackjack pays out. Defaults to +1.
             blackjack_beats_21 (bool): whether a blackjack (21 on the first two cards) beats a regular 21. Defaults to True.
             dealer_hits_on_soft (bool): whether the dealer stands or hits on soft 17. Defaults to False.
             deck (object): the class name of the deck. Defaults to 'InfiniteDeck'.
 
         Notes:
-            The default arguments correspond to Sutton and Barto's 'Reinforcement Learning' (2018).
+            The default arguments correspond to Sutton and Barto's example in 'Reinforcement Learning' (2018).
             blackjack_beats_21=False corresponds to the OpenAI Gym environment 'Blackjack-v0'.
             blackjack_beats_21=False with winning_blackjack=1.5 correponds to 'Blackjack-v0' initialized with natural=True.
-            Casinos usually have winning_blackjack=1.5. Sometimes winning_blackjack=1.2 and/or dealer_hits_on_soft_17=True.
+            Casinos usually have winning_blackjack=1.5, and sometimes winning_blackjack=1.2 and/or dealer_hits_on_soft_17=True.
         """
-        self.payout = np.zeros((len(Count), len(Count)))      # The player and dealer have equal scores.
-        self.payout[Count._BUST, :          ]          = -1.  # The player busts regardless of whether the dealer busts.
-        self.payout[Count._16:,  Count._BUST]          = +1.  # The dealer busts and the player doesn't.
-        self.payout[np.tril_indices(len(Count), k=-1)] = +1.  # The player scores higher than the dealer.
-        self.payout[np.triu_indices(len(Count), k=+1)] = -1.  # The dealer scores higher than the player.
+        self.payout = np.zeros((len(Count), len(Count)))        # The player and dealer have equal scores.
+        self.payout[Count._BUST, :          ]          = -1.    # The player busts regardless of whether the dealer busts.
+        self.payout[Count._16:,  Count._BUST]          = +1.    # The dealer busts and the player doesn't.
+        self.payout[np.tril_indices(len(Count), k=-1)] = +1.    # The player scores higher than the dealer.
+        self.payout[np.triu_indices(len(Count), k=+1)] = -1.    # The dealer scores higher than the player.
         self.payout[Count._BJ,   :Count._BJ ]          = winning_blackjack
         if not blackjack_beats_21:
-            self.payout[Count._BJ, Count._21]          =  0.  # A player's blackjack and a dealer's 21 are treated equally.
-            self.payout[Count._21, Count._BJ]          =  0.  # A player's 21 and a dealer's blackjack are treated equally.
+            self.payout[Count._BJ, Count._21]          =  0.    # A player's blackjack and a dealer's 21 are treated equally.
+            self.payout[Count._21, Count._BJ]          =  0.    # A player's 21 and a dealer's blackjack are treated equally.
         self.dealer_policy = hit_on_soft_17 if dealer_hits_on_soft_17 else stand_on_17
         self.observation_space = spaces.Tuple((
-            spaces.Discrete(len(Hand)), # only include transient Markov states because absorbing states don't need to be explored
-            spaces.Discrete(len(Card))
+            spaces.Discrete(len(Hand)),                         # Only include transient Markov states because
+            spaces.Discrete(len(Card))                          # absorbing states don't need to be explored.
         ))
         self.action_space = spaces.Discrete(len(Action))
         self.reward_range = (np.min(self.payout), np.max(self.payout))
         self.seed()
         self.deck = deck(self.np_random)
+
+        if not model_free:
+            self.state_space = spaces.Tuple((
+                spaces.Discrete(len(Player)),                   # Include all transient and absorbing Markov states.
+                spaces.Discrete(len(Dealer))
+            ))
+            dealer_policy_one_hot = one_hot_policy(np.resize(self.dealer_policy, len(Player)))
+            dealer_fsm = (fsm * np.expand_dims(dealer_policy_one_hot, axis=0).T).sum(axis=0)
+            dealer_N = np.linalg.inv(id_t - player_card_transitions(dealer_fsm)[:-len(Terminal), :-len(Terminal)])
+            prob_uc_c = prob_uc_h @ dealer_N[:len(Hand), len(Hand):]
+            self.reward_values = np.unique(self.payout)
+            reward_outcomes = np.array([
+                self.payout == r
+                for r in self.reward_values
+            ], dtype=int)
+            prob_c_uc_r = (reward_outcomes @ prob_uc_c.T).transpose(1, 2, 0)
+
+            self.model = np.zeros((len(Player), len(Dealer), len(Action), len(self.reward_values), len(Player), len(Dealer)))
+            for _c in range(len(Card)):
+                self.model[:len(Hand), _c, :, 1, :-len(Terminal), _c] = prob_p_a_p[:len(Hand), :, :-len(Terminal)]
+            for _a in range(len(Action)):
+                self.model[len(Hand):-len(Terminal), :-len(Terminal), _a, :, Player._END, Dealer._END] = (prob_p_a_p[len(Hand):-len(Terminal), _a, Player._END] * prob_c_uc_r.T).T
+            self.model[Player._END, Dealer._END, :, 1, Player._END, Dealer._END] = prob_p_a_p[Player._END, :, Player._END]
+
+            assert np.isclose(self.model[..., -len(Terminal):, :-len(Terminal)], 0.).all()
+            assert np.isclose(self.model[..., :-len(Terminal), -len(Terminal):], 0.).all()
+
+            self.model[Player._END, :-len(Terminal), :, 1, Player._END, Dealer._END] = 1.
+            self.model[:-len(Terminal), Dealer._END, :, 1, Player._END, Dealer._END] = 1.
+
+            self.model = self.model.reshape((len(Player) * len(Dealer), len(Action), len(self.reward_values), len(Player) * len(Dealer)))
+
+            assert np.isclose(self.model.sum(axis=(2, 3)), 1.).all()
+
+            self.transition = self.model.sum(axis=2)
+            assert np.isclose(self.transition.sum(axis=2), 1.).all()
+
+            self.immediate_reward = self.model.sum(axis=3) @ self.reward_values
+
         self.reset()
 
     def seed(self, seed=None):
