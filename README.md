@@ -49,7 +49,7 @@ A player using the basic strategy will approximately lose 48.0%, win 43.3% and t
 
 ## Acknowledgement
 
-Special thanks to [Craig Lee Zirbel](https://sites.google.com/view/clzirbel/home) for his illumunating [blackjack paper](https://www.google.com/url?q=https%3A%2F%2Fwww.dropbox.com%2Fs%2Fxrntclqyx36jhis%2FBlackjack_talk_2001.pdf%3Fdl%3D0&sa=D&sntz=1&usg=AFQjCNE-4z5OXoUaqlLra9HD8rfaN-kVkQ).
+Special thanks to [Craig L. Zirbel](https://sites.google.com/view/clzirbel/home) for his illumunating [blackjack paper](https://www.dropbox.com/s/xrntclqyx36jhis/Blackjack_talk_2001.pdf).
 
 ## License
 
