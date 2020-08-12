@@ -359,7 +359,7 @@ class BlackjackEnv(gym.Env):
         self.seed()
         self.deck = deck(self.np_random)
 
-        if isinstance(deck, InfiniteDeck) and model_based:
+        if isinstance(self.deck, InfiniteDeck) and model_based:
             self.state_space = spaces.Tuple((
                 spaces.Discrete(len(Player)),                   # Include all transient and absorbing Markov states.
                 spaces.Discrete(len(Dealer))
