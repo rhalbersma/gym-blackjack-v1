@@ -65,17 +65,16 @@ class Count(IntEnum):
 count_labels = [ c.name[1:] for c in Count ]
 
 class Card(IntEnum):
-    _NONE =  0
-    _2    =  1
-    _3    =  2
-    _4    =  3
-    _5    =  4
-    _6    =  5
-    _7    =  6
-    _8    =  7
-    _9    =  8
-    _T    =  9 # 10, J, Q, K are all denoted as T
-    _A    = 10
+    _2 = 0
+    _3 = 1
+    _4 = 2
+    _5 = 3
+    _6 = 4
+    _7 = 5
+    _8 = 6
+    _9 = 7
+    _T = 8 # 10, J, Q, K are all denoted as T
+    _A = 9
 
 card_labels = [ c.name[1:] for c in Card ]
 
@@ -170,9 +169,6 @@ fsm_hit[Player.BJ, :] = fsm_hit[Player.S21, :]
 
 fsm_hit[Player._BUST:, :] = Player._END
 
-for _p in range(len(Player)):
-    fsm_hit[_p, Card._NONE] = _p
-
 # Going from one state to the next state after 'standing'.
 fsm_stand = np.zeros(len(Player), dtype=int)
 
@@ -248,7 +244,6 @@ class InfiniteDeck:
 
 # Card probabilities for an InfiniteDeck
 prob = np.ones((len(Card))) / 13.
-prob[Card._NONE] = 0.
 prob[Card._T] *= 4.  # 10, J, Q, K all count as T
 assert np.isclose(prob.sum(), 1.)
 
