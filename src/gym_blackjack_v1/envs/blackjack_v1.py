@@ -359,7 +359,7 @@ class BlackjackEnv(gym.Env):
         self.seed()
         self.deck = deck(self.np_random)
 
-        if model_based:
+        if isinstance(deck, InfiniteDeck) and model_based:
             self.state_space = spaces.Tuple((
                 spaces.Discrete(len(Player)),                   # Include all transient and absorbing Markov states.
                 spaces.Discrete(len(Dealer))
@@ -389,13 +389,12 @@ class BlackjackEnv(gym.Env):
             self.model[:-len(Terminal), Dealer._END, :, 1, Player._END, Dealer._END] = 1.
 
             self.model = self.model.reshape((len(Player) * len(Dealer), len(Action), len(self.reward_values), len(Player) * len(Dealer)))
-
             assert np.isclose(self.model.sum(axis=(2, 3)), 1.).all()
 
             self.transition = self.model.sum(axis=2)
             assert np.isclose(self.transition.sum(axis=2), 1.).all()
 
-            self.immediate_reward = self.model.sum(axis=3) @ self.reward_values
+            self.reward = self.model.sum(axis=3) @ self.reward_values
 
         self.reset()
 
