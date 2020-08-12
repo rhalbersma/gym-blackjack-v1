@@ -15,7 +15,7 @@ import pandas as pd
 ################################################################################
 
 class Hand(IntEnum):
-    DEAL =  0
+    NONE =  0
     H2   =  1
     H3   =  2
     H4   =  3
@@ -65,16 +65,17 @@ class Count(IntEnum):
 count_labels = [ c.name[1:] for c in Count ]
 
 class Card(IntEnum):
-    _2 =  0
-    _3 =  1
-    _4 =  2
-    _5 =  3
-    _6 =  4
-    _7 =  5
-    _8 =  6
-    _9 =  7
-    _T =  8 # 10, J, Q, K are all denoted as T
-    _A =  9
+    _NONE =  0
+    _2    =  1
+    _3    =  2
+    _4    =  3
+    _5    =  4
+    _6    =  5
+    _7    =  6
+    _8    =  7
+    _9    =  8
+    _T    =  9 # 10, J, Q, K are all denoted as T
+    _A    = 10
 
 card_labels = [ c.name[1:] for c in Card ]
 
@@ -124,9 +125,9 @@ action_labels = [ a.name[0] for a in Action ]
 fsm_hit = np.zeros((len(Player), len(Card)), dtype=int)
 
 for _j, _c in enumerate(range(Card._2, Card._T)):
-    fsm_hit[Player.DEAL, _c] = Player.H2 + _j
-fsm_hit[Player.DEAL, Card._T] = Player.T
-fsm_hit[Player.DEAL, Card._A] = Player.A
+    fsm_hit[Player.NONE, _c] = Player.H2 + _j
+fsm_hit[Player.NONE, Card._T] = Player.T
+fsm_hit[Player.NONE, Card._A] = Player.A
 
 for _i, _h in enumerate(range(Player.H2, Player.H11)):
     for _j, _c in enumerate(range(Card._2, Card._A)):
@@ -168,6 +169,9 @@ fsm_hit[Player.S21, Card._A] = Player.H12
 fsm_hit[Player.BJ, :] = fsm_hit[Player.S21, :]
 
 fsm_hit[Player._BUST:, :] = Player._END
+
+for _p in range(len(Player)):
+    fsm_hit[_p, Card._NONE] = _p
 
 # Going from one state to the next state after 'standing'.
 fsm_stand = np.zeros(len(Player), dtype=int)
@@ -238,12 +242,13 @@ class InfiniteDeck:
 ################################################################################
 # Blackjack with an InfiniteDeck is a Markov Decision Problem (MDP).
 # We can construct a full model for this environment through the definition of
-# prob_s_a_r_s = a rank-4 tensor containing the probabilities of starting with
+# prob_s_a_r_s' = a rank-4 tensor containing the probabilities of starting with
 # state s, applying action a, receiving reward r and transitioning to state s'.
 ################################################################################
 
 # Card probabilities for an InfiniteDeck
 prob = np.ones((len(Card))) / 13.
+prob[Card._NONE] = 0.
 prob[Card._T] *= 4.  # 10, J, Q, K all count as T
 assert np.isclose(prob.sum(), 1.)
 
@@ -267,7 +272,7 @@ def player_action_transitions(fsm):
 def upcard_hand_transitions(fsm):
     prob_uc_h = np.zeros((len(Card), len(Hand)))
     for card in range(len(Card)):
-        player = fsm[Player.DEAL, card]
+        player = fsm[Player.NONE, card]
         prob_uc_h[card, player] = 1.
     assert np.isclose(prob_uc_h.sum(axis=-1), 1.).all()
     return prob_uc_h
@@ -300,7 +305,7 @@ class BlackjackEnv(gym.Env):
 
     Observations:
         There are 34 * 10 = 340 discrete states:
-            34 player counts (DEAL, H2-H21, T, A, S12-S21, BJ)
+            34 player counts (NONE, H2-H21, T, A, S12-S21, BJ)
             10 dealer cards showing (2-9, T, A)
 
     Actions:
@@ -410,7 +415,7 @@ class BlackjackEnv(gym.Env):
             d = dealer_labels[self.dealer]
             return f'player: {p:>4}; dealer: {d:>4};'
         else:
-            d = player_labels[fsm_hit[Player.DEAL, self.dealer] if upcard_only else self.dealer]
+            d = player_labels[fsm_hit[Player.NONE, self.dealer] if upcard_only else self.dealer]
             R = self.payout[count[self.player], count[self.dealer]]
             return f'player: {p:>4}; dealer: {d:>4}; reward: {R:>+4}'
 
@@ -429,7 +434,7 @@ class BlackjackEnv(gym.Env):
         """
         p1, p2, up = self.deck.deal()
         self.info = { 'player': [ card_labels[p1], card_labels[p2] ], 'dealer': [ card_labels[up] ] }
-        self.player, self.dealer = fsm_hit[fsm_hit[Player.DEAL, p1], p2], up
+        self.player, self.dealer = fsm_hit[fsm_hit[Player.NONE, p1], p2], up
         return self._get_obs()
 
     def explore(self, start):
@@ -456,7 +461,7 @@ class BlackjackEnv(gym.Env):
             self.player = fsm_hit[self.player, card]
             done = self.player == Player._BUST
         else:
-            self.dealer = fsm_hit[Player.DEAL, self.dealer]
+            self.dealer = fsm_hit[Player.NONE, self.dealer]
             while True:
                 card = self.deck.draw()
                 self.info['dealer'].append(card_labels[card])

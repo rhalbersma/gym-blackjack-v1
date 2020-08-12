@@ -8,7 +8,7 @@ import numpy as np
 import statsmodels.stats.weightstats as ssw
 from tqdm import tqdm
 
-def simulate(agent, env, episodes=10**6):
+def simulate(agent, env, start=None, episodes=10**6):
     """
     Simulate an agent in an environment over a number of episodes.
 
@@ -26,7 +26,8 @@ def simulate(agent, env, episodes=10**6):
     hist = defaultdict(int)
     for _ in tqdm(range(episodes)):
         total = 0.
-        obs, reward, done = env.reset(), 0., False
+        obs = env.reset() if start is None else env.explore(start)
+        reward, done = 0., False
         while True:
             action = agent.act(obs, reward, done)
             obs, reward, done, _ = env.step(action)
