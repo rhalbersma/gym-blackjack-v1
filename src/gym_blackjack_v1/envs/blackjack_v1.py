@@ -324,7 +324,7 @@ class BlackjackEnv(gym.Env):
 
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, winning_blackjack=+1., blackjack_beats_21=True, dealer_hits_on_soft_17=False, deck=InfiniteDeck, model_based=False):
+    def __init__(self, winning_blackjack=+1., blackjack_beats_21=True, dealer_hits_on_soft_17=False, deck=InfiniteDeck, model=False):
         """
         Initialize the state of the environment.
 
@@ -333,6 +333,7 @@ class BlackjackEnv(gym.Env):
             blackjack_beats_21 (bool): whether a blackjack (21 on the first two cards) beats a regular 21. Defaults to True.
             dealer_hits_on_soft (bool): whether the dealer stands or hits on soft 17. Defaults to False.
             deck (object): the class name of the deck. Defaults to 'InfiniteDeck'.
+            model (bool): whether reward and transition probability tensors should be computed. Defaults to False.
 
         Notes:
             The default arguments correspond to Sutton and Barto's example in 'Reinforcement Learning' (2018).
@@ -359,7 +360,7 @@ class BlackjackEnv(gym.Env):
         self.seed()
         self.deck = deck(self.np_random)
 
-        if isinstance(self.deck, InfiniteDeck) and model_based:
+        if isinstance(self.deck, InfiniteDeck) and model:
             self.state_space = spaces.Tuple((
                 spaces.Discrete(len(Player)),                   # Include all transient and absorbing Markov states.
                 spaces.Discrete(len(Dealer))
