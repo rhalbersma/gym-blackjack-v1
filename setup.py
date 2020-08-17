@@ -16,7 +16,7 @@ setup(
     packages=find_packages(where='src'),
     package_dir={'': 'src'},
     install_requires=[
-        'aenum', 'gym', 'numpy', 'setuptools', 'statsmodels', 'tqdm', 'wheel'
+        'aenum', 'gym', 'numpy', 'pylint', 'setuptools', 'statsmodels', 'tqdm', 'wheel'
     ],
     python_requires='>=3.6',
     classifiers=[
