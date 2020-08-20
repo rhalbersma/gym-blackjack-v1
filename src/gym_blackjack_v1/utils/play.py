@@ -3,14 +3,24 @@
 #    (See accompanying file LICENSE_1_0.txt or copy at
 #          http://www.boost.org/LICENSE_1_0.txt)
 
-import gym
-from ..agents import BasicStrategyAgent
-from ..envs import Action
+from collections import defaultdict
 
-def summary(episodes, total):
+import gym
+import statsmodels.stats.weightstats as ssw
+
+from gym_blackjack_v1.agents import BasicStrategyAgent
+from gym_blackjack_v1.envs import Action
+
+def summary(stats):
+    nobs = int(stats.nobs)
+
+    # https://github.com/statsmodels/statsmodels/issues/4797
+    sum = stats.sum if stats.nobs > 1 else stats.sum.item()
+    mean = stats.mean if stats.nobs > 1 else stats.mean.item()
+
     print(f"""
 ============================================================
-Episodes: {episodes:>4}, total reward: {total:>+5.1f}, average reward: {total / episodes:>+7.1%}
+Episodes: {nobs:>4}, total reward: {sum:>+5.1f}, average reward: {mean:>+7.1%}
 ============================================================
 """
     )
@@ -33,8 +43,9 @@ def play(env, episodes=100, hint=False):
     """
     if hint:
         agent = BasicStrategyAgent(env)
-    total = 0.
-    for i, _ in enumerate(range(episodes)):
+    hist = defaultdict(int)
+    for i in range(episodes):
+        total = 0.
         obs, reward, done = env.reset(), 0., False
         while True:
             print(env.render(), end=' ')
@@ -54,7 +65,12 @@ def play(env, episodes=100, hint=False):
             obs, reward, done, _ = env.step(a)
             total += reward
             if done:
+                hist[total] += 1
                 break
+        stats = ssw.DescrStatsW(
+            data=list(hist.keys()),
+            weights=list(hist.values())
+        )
         print(env.render())
-        summary(i + 1, total)
-    return total / episodes
+        summary(stats)
+    return stats

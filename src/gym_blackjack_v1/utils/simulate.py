@@ -4,7 +4,7 @@
 #          http://www.boost.org/LICENSE_1_0.txt)
 
 from collections import defaultdict
-import numpy as np
+
 import statsmodels.stats.weightstats as ssw
 from tqdm import tqdm
 
@@ -35,7 +35,8 @@ def simulate(agent, env, start=None, episodes=10**6):
             if done:
                 hist[total] += 1
                 break
-    return ssw.DescrStatsW(
-        data=np.array(list(hist.keys())),
-        weights=np.array(list(hist.values()))
+    stats = ssw.DescrStatsW(
+        data=list(hist.keys()),
+        weights=list(hist.values())
     )
+    return stats
