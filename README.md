@@ -16,6 +16,7 @@ git clone https://github.com/rhalbersma/gym-blackjack-v1.git
 cd gym-blackjack-v1
 python3 -m venv .env
 source .env/bin/activate
+pip install --upgrade pip setuptools wheel
 pip install -e .
 ```
 
