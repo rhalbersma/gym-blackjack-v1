@@ -44,7 +44,7 @@ def play(env, episodes=100, hint=False):
     if hint:
         agent = BasicStrategyAgent(env)
     hist = defaultdict(int)
-    for i in range(episodes):
+    for _ in range(episodes):
         total = 0.
         obs, reward, done = env.reset(), 0., False
         while True:
