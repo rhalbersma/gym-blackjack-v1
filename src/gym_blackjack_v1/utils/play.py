@@ -12,15 +12,9 @@ from gym_blackjack_v1.agents import BasicStrategyAgent
 from gym_blackjack_v1.envs import Action
 
 def summary(stats):
-    nobs = int(stats.nobs)
-
-    # https://github.com/statsmodels/statsmodels/issues/4797
-    sum = stats.sum if stats.nobs > 1 else stats.sum.item()
-    mean = stats.mean if stats.nobs > 1 else stats.mean.item()
-
     print(f"""
 ============================================================
-Episodes: {nobs:>4}, total reward: {sum:>+5.1f}, average reward: {mean:>+7.1%}
+Episodes: {int(stats.nobs):>4}, total reward: {stats.sum:>+5.1f}, average reward: {stats.mean:>+7.1%}
 ============================================================
 """
     )
@@ -72,5 +66,7 @@ def play(env, episodes=100, hint=False):
             weights=list(hist.values())
         )
         print(env.render())
-        summary(stats)
+        if len(hist.keys()) > 1:
+            # https://github.com/statsmodels/statsmodels/issues/4797
+            summary(stats)
     return stats
