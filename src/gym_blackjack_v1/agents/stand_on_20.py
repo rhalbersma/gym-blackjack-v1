@@ -4,7 +4,9 @@
 #          http://www.boost.org/LICENSE_1_0.txt)
 
 import numpy as np
-from ..envs import Hand, Card, Action
+
+from ..enums import Hand, Card, Action
+
 
 class StandOn20Agent:
     """
@@ -22,3 +24,4 @@ class StandOn20Agent:
 
     def act(self, obs, reward, done):
         return self.policy[self.observe(obs)]
+

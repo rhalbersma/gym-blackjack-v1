@@ -3,7 +3,8 @@
 #    (See accompanying file LICENSE_1_0.txt or copy at
 #          http://www.boost.org/LICENSE_1_0.txt)
 
-from ..envs import Action
+from ..enums import Action
+
 
 class AlwaysStandAgent:
     """
@@ -14,3 +15,4 @@ class AlwaysStandAgent:
 
     def act(self, obs, reward, done):
         return Action.s
+

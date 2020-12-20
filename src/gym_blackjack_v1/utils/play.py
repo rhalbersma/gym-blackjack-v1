@@ -8,28 +8,21 @@ from collections import defaultdict
 import gym
 import statsmodels.stats.weightstats as ssw
 
-from gym_blackjack_v1.agents import BasicStrategyAgent
-from gym_blackjack_v1.envs import Action
+from ..agents import BasicStrategyAgent
+from ..enums import Action
 
-def summary(stats):
-    print(f"""
-============================================================
-Episodes: {int(stats.nobs):>4}, total reward: {stats.sum:>+5.1f}, average reward: {stats.mean:>+7.1%}
-============================================================
-"""
-    )
 
 def play(env, episodes=100, hint=False):
     """
     Play an interactive session of blackjack.
 
     Args:
-        env (object): an OpenAI Gym blackjack environment, either 'Blackjack-v0' or 'Blackjack-v1'.
+        env (object): an OpenAI Gym blackjack environment. Defaults to 'Blackjack-v1'.
         episodes (int): the number of episodes to play. Defaults to 100.
         hint (bool): whether to show the Basic Strategy (Thorp, 1966) as a hint. Defaults to False.
 
     Returns:
-        The average reward per episode.
+        A DescrStatsW object with the episodic reward distribution.
 
     Notes:
         The user can input either 0/1 or s/h (for stand/hit) as actions.
@@ -60,13 +53,11 @@ def play(env, episodes=100, hint=False):
             total += reward
             if done:
                 hist[total] += 1
+                print(env.render())
                 break
-        stats = ssw.DescrStatsW(
-            data=list(hist.keys()),
-            weights=list(hist.values())
-        )
-        print(env.render())
-        if len(hist.keys()) > 1:
-            # https://github.com/statsmodels/statsmodels/issues/4797
-            summary(stats)
+    stats = ssw.DescrStatsW(
+        data=list(hist.keys()),
+        weights=list(hist.values())
+    )
     return stats
+

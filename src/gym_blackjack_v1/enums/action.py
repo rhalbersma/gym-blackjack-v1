@@ -3,16 +3,12 @@
 #    (See accompanying file LICENSE_1_0.txt or copy at
 #          http://www.boost.org/LICENSE_1_0.txt)
 
-from ..enums import Action
+from aenum import IntEnum
 
 
-class AlwaysHitAgent:
-    """
-    An agent that always hits.
-    """
-    def __init__(self, env=None):
-        pass
+class Action(IntEnum):
+    s = 0
+    h = 1
 
-    def act(self, obs, reward, done):
-        return Action.h
 
+action_labels = [ a.name[0] for a in Action ]

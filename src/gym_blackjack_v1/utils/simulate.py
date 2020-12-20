@@ -8,6 +8,7 @@ from collections import defaultdict
 import statsmodels.stats.weightstats as ssw
 from tqdm import tqdm
 
+
 def simulate(agent, env, start=None, episodes=10**6):
     """
     Simulate an agent in an environment over a number of episodes.
@@ -40,3 +41,4 @@ def simulate(agent, env, start=None, episodes=10**6):
         weights=list(hist.values())
     )
     return stats
+

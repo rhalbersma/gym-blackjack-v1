@@ -3,6 +3,7 @@
 #    (See accompanying file LICENSE_1_0.txt or copy at
 #          http://www.boost.org/LICENSE_1_0.txt)
 
+
 class RandomPlayAgent:
     """
     An agent that randomly samples an action.
@@ -12,3 +13,4 @@ class RandomPlayAgent:
 
     def act(self, obs, reward, done):
         return self.action_space.sample()
+
