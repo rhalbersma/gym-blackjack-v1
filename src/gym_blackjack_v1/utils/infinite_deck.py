@@ -15,8 +15,8 @@ class InfiniteDeck:
     def __init__(self, np_random):
         self.cards = np.array([ c for c in range(Card._2, Card._T) ] + [ Card._T ] * 4 + [ Card._A ])
         self.np_random = np_random
-        self.prob = np.ones((len(Card))) / 13
-        self.prob[Card._T] *= 4 # 10, J, Q, K all count as T
+        _, counts = np.unique(self.cards, return_counts=True)
+        self.prob = counts / counts.sum()
         assert np.isclose(self.prob.sum(), 1)
 
     def draw(self):
