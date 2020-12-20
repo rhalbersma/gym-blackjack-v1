@@ -37,14 +37,14 @@ class BlackjackEnv(gym.Env):
 
     Rewards:
         There are up to 4 rewards for the player:
-            -1. : the player busted, regardless of the dealer,
+            -1  : the player busted, regardless of the dealer,
                 or the player's total is lower than the dealer's,
                 or the dealer has a blackjack and the player doesn't;
-             0. : the player's total is equal to the dealer's;
-            +1. : the player's total is higher than the dealer's,
+             0  : the player's total is equal to the dealer's;
+            +1  : the player's total is higher than the dealer's,
                 or the dealer busted and the player didn't;
             +1.5: the player has a blackjack and the dealer doesn't.
-                (in Sutton and Barto, this pays out +1. to the player).
+                (in Sutton and Barto, this pays out +1 to the player).
     """
 
     metadata = {'render.modes': ['human']}
@@ -84,15 +84,18 @@ class BlackjackEnv(gym.Env):
         self.reward_range = (np.min(self.payout), np.max(self.payout))
         self.seed()
         self.deck = deck(self.np_random)
-
-        if isinstance(self.deck, InfiniteDeck) and model_based:
-            self.state_space = spaces.Tuple((
-                spaces.Discrete(len(Player)),                   # Include all transient and absorbing Markov states.
-                spaces.Discrete(len(Dealer))
-            ))
-            self.model, self.transition, self.reward = model.build(self.payout, self.dealer_policy)
-
+        if model_based:
+            self.build_model()
         self.reset()
+
+    def build_model(self):
+        if not isinstance(self.deck, InfiniteDeck):
+            raise TypeError(f'To build an env\'s model, its deck attribute needs to be of class type "InfiniteDeck" rather than "{type(self.deck).__name__}".')
+        self.state_space = spaces.Tuple((
+            spaces.Discrete(len(Player)),   # Include all transient and absorbing Markov states because
+            spaces.Discrete(len(Dealer))    # absorbing states will ensure termination of dynamic programming methods.
+        ))
+        self.model, self.transition, self.reward = model.build(self.payout, self.dealer_policy, self.deck.prob)
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
@@ -159,6 +162,6 @@ class BlackjackEnv(gym.Env):
                 if self.dealer == Player._BUST or not self.dealer_policy[self.dealer]:
                     break
             done = True
-        reward = self.payout[fsm.count[self.player], fsm.count[self.dealer]] if done else 0.
+        reward = self.payout[fsm.count[self.player], fsm.count[self.dealer]] if done else 0
         return self._get_obs(), reward, done, self.info
 
