@@ -9,7 +9,7 @@ import statsmodels.stats.weightstats as ssw
 from tqdm import tqdm
 
 
-def simulate(agent, env, start=None, episodes=10**6):
+def simulate(agent, env, start=None, episodes=1_000_000):
     """
     Simulate an agent in an environment over a number of episodes.
 
