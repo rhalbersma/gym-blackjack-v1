@@ -36,7 +36,7 @@ class BlackjackEnv(gym.Env):
         doubling down, splitting or surrendering, are not supported.
 
     Rewards:
-        There are up to 4 rewards for the player:
+        There are up to 4 rewards for the player. In units relative to the bet size:
             -1  : the player busted, regardless of the dealer,
                 or the player's total is lower than the dealer's,
                 or the dealer has a blackjack and the player doesn't;
@@ -49,30 +49,30 @@ class BlackjackEnv(gym.Env):
 
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, winning_blackjack=+1, blackjack_beats_21=True, dealer_hits_on_soft_17=False, deck=InfiniteDeck, model_based=False):
+    def __init__(self, winning_blackjack_payout=+1, blackjack_ties_with_21=False, dealer_hits_on_soft_17=False, model_based=False):
         """
         Initialize the state of the environment.
 
         Args:
-            winning_blackjack (float): how much a winning blackjack pays out. Defaults to +1.
-            blackjack_beats_21 (bool): whether a blackjack (21 on the first two cards) beats a regular 21. Defaults to True.
-            dealer_hits_on_soft (bool): whether the dealer stands or hits on soft 17. Defaults to False.
-            deck (object): the class name of the deck. Defaults to 'InfiniteDeck'.
+            winning_blackjack_payout (float): how much a winning blackjack pays out. Defaults to +1.
+            blackjack_ties_with_21 (bool): whether a blackjack (21 on the first two cards) ties with a regular 21. Defaults to False.
+            dealer_hits_on_soft_17 (bool): whether the dealer stands or hits on soft 17. Defaults to False.
             model_based (bool): whether reward and transition probability tensors should be computed. Defaults to False.
 
         Notes:
             The default arguments correspond to Sutton and Barto's example in 'Reinforcement Learning' (2018).
-            blackjack_beats_21=False corresponds to the OpenAI Gym environment 'Blackjack-v0'.
-            blackjack_beats_21=False with winning_blackjack=1.5 correponds to 'Blackjack-v0' initialized with natural=True.
-            Casinos usually have winning_blackjack=1.5, and sometimes winning_blackjack=1.2 and/or dealer_hits_on_soft_17=True.
+            blackjack_ties_with_21=True corresponds to the OpenAI Gym environment 'Blackjack-v0'.
+            blackjack_ties_with_21=True with winning_blackjack_payout=1.5 correponds to 'Blackjack-v0' initialized with natural=True.
+            Casinos usually have winning_blackjack_payout=+1.5 (sometimes +1.2), and/or dealer_hits_on_soft_17=True.
+            model_based=True is an extension to the OpenAI Gym interface to enable dynamic programming algorithms.
         """
         self.payout = np.zeros((len(Count), len(Count)))        # The player and dealer have equal scores.
         self.payout[Count._BUST, :          ]          = -1     # The player busts regardless of whether the dealer busts.
         self.payout[Count._16:,  Count._BUST]          = +1     # The dealer busts and the player doesn't.
         self.payout[np.tril_indices(len(Count), k=-1)] = +1     # The player scores higher than the dealer.
         self.payout[np.triu_indices(len(Count), k=+1)] = -1     # The dealer scores higher than the player.
-        self.payout[Count._BJ,   :Count._BJ ]          = winning_blackjack
-        if not blackjack_beats_21:
+        self.payout[Count._BJ,   :Count._BJ ]          = winning_blackjack_payout
+        if blackjack_ties_with_21:
             self.payout[Count._BJ, Count._21]          =  0     # A player's blackjack and a dealer's 21 are treated equally.
             self.payout[Count._21, Count._BJ]          =  0     # A player's 21 and a dealer's blackjack are treated equally.
         self.dealer_policy = dealer.hits_on_soft_17 if dealer_hits_on_soft_17 else dealer.stands_on_17
@@ -83,12 +83,12 @@ class BlackjackEnv(gym.Env):
         self.action_space = spaces.Discrete(len(Action))
         self.reward_range = (np.min(self.payout), np.max(self.payout))
         self.seed()
-        self.deck = deck(self.np_random)
+        self.deck = InfiniteDeck(self.np_random)
         if model_based:
-            self.build_model()
+            self._build_model()
         self.reset()
 
-    def build_model(self):
+    def _build_model(self):
         if not isinstance(self.deck, InfiniteDeck):
             raise TypeError(f'To build an env\'s model, its deck attribute needs to be of class type "InfiniteDeck" rather than "{type(self.deck).__name__}".')
         self.state_space = spaces.Tuple((
@@ -126,25 +126,11 @@ class BlackjackEnv(gym.Env):
             Cards are drawn from a single deck with replacement (i.e. from an infinite deck).
         """
         p1, p2, up = self.deck.deal()
-        self.info = { 'player': [ card_labels[p1], card_labels[p2] ], 'dealer': [ card_labels[up] ] }
+        self.info = { 
+            'player': [ card_labels[p1], card_labels[p2] ], 
+            'dealer': [ card_labels[up] ] 
+        }
         self.player, self.dealer = fsm.hit[fsm.hit[Player.NONE, p1], p2], up
-        return self._get_obs()
-
-    def explore(self, start):
-        """
-        Explore a specific starting state of the environment.
-
-        Args:
-            start (tuple of ints): the player's count and the dealer's upcard.
-
-        Returns:
-            observation (object): the player's count and the dealer's upcard.
-
-        Notes:
-            Monte Carlo Exploring Starts should use this method instead of reset().
-        """
-        self.player, self.dealer = start
-        self.info = { 'player': [], 'dealer': [] }
         return self._get_obs()
 
     def step(self, action):
@@ -165,3 +151,23 @@ class BlackjackEnv(gym.Env):
         reward = self.payout[fsm.count[self.player], fsm.count[self.dealer]] if done else 0
         return self._get_obs(), reward, done, self.info
 
+    def explore(self, start):
+        """
+        Explore a specific starting state of the environment.
+
+        Args:
+            start (tuple of ints): the player's count and the dealer's upcard.
+
+        Returns:
+            observation (object): the player's count and the dealer's upcard.
+
+        Notes:
+            This is an extension of the OpenAI Gym interface.
+            Monte Carlo Exploring Starts should use this method instead of reset().
+        """
+        self.player, self.dealer = start
+        self.info = { 
+            'player': [], 
+            'dealer': [] 
+        }
+        return self._get_obs()
