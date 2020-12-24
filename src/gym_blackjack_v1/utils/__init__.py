@@ -6,3 +6,4 @@
 from .infinite_deck import InfiniteDeck
 from .play import play
 from .simulate import simulate
+from . import fsm

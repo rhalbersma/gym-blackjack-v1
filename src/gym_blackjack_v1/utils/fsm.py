@@ -5,87 +5,87 @@
 
 import numpy as np
 
-from ..enums import Card, Hand, Player
+from ..enums import Card, State
 
 ################################################################################
 # Factor all transition logic into a finite-state machine (FSM) lookup table.
 # Note that this is model-free RL because there are no explicit probabilities.
 #
 # The FSM approach has two main benefits:
-# 1) it speeds up the model-free version of the BlackjackEnv class;
-# 2) it is straightforward to extend to a model-based version.
+# 1) it is fast to simulate the model-free version of the BlackjackEnv class;
+# 2) combining the FSM with card probabilities leads to a model-based version.
 ################################################################################
 
-# Going from a state to the next state after 'hitting' another card.
-hit = np.zeros((len(Player), len(Card)), dtype=int)
+# Going from a State to the next State after 'hitting' another Card.
+hit = np.full((len(State), len(Card)), -1, dtype=int)
 
-for _j, _c in enumerate(range(Card._2, Card._T)):
-    hit[Player.NONE, _c] = Player.H2 + _j
-hit[Player.NONE, Card._T] = Player.T
-hit[Player.NONE, Card._A] = Player.A
+hit[State._DEAL, Card._2] = State._DEUCE
+hit[State._DEAL, Card._3] = State._TREY
+hit[State._DEAL, Card._T] = State._TEN
+hit[State._DEAL, Card._A] = State._ACE
+for _j, _c in enumerate(range(Card._4, Card._T)):
+    hit[State._DEAL, _c] = State.H4 + _j
 
-for _i, _h in enumerate(range(Player.H2, Player.H11)):
+for _i, _h in enumerate((State._DEUCE, State._TREY)):
     for _j, _c in enumerate(range(Card._2, Card._A)):
-        hit[_h, _c] = _h + 2 + _j
-    hit[_h, Card._A] = Player.S13 + _i
+        hit[_h, _c] = State.H4 + _i + _j
+    hit[_h, Card._A] = State.S13 + _i
 
 for _j, _c in enumerate(range(Card._2, Card._A)):
-    hit[Player.H11, _c] = Player.H13 + _j
-hit[Player.H11, Card._A] = Player.H12
-
-for _i, _h in enumerate(range(Player.H12, Player.H21)):
-    for _j, _c in enumerate(range(Card._2, Card._T - _i)):
-        hit[_h, _c] = _h + 2 + _j
-    hit[_h, (Card._T - _i):Card._A] = Player._BUST
-    hit[_h, Card._A] = _h + 1
-
-hit[Player.H21, :] = Player._BUST
-
-for _j, _c in enumerate(range(Card._2, Card._A)):
-    hit[Player.T, _c] = Player.H12 + _j
-hit[Player.T, Card._A] = Player.BJ
+    hit[State._TEN, _c] = State.H12 + _j
+hit[State._TEN, Card._A] = State.BJ
 
 for _j, _c in enumerate(range(Card._2, Card._T)):
-    hit[Player.A, _c] = Player.S13 + _j
-hit[Player.A, Card._T] = Player.BJ
-hit[Player.A, Card._A] = Player.S12
+    hit[State._ACE, _c] = State.S13 + _j
+hit[State._ACE, Card._T] = State.BJ
+hit[State._ACE, Card._A] = State.S12
 
-for _i, _s in enumerate(range(Player.S12, Player.S21)):
+for _i, _h in enumerate(range(State.H4, State.H11)):
+    for _j, _c in enumerate(range(Card._2, Card._A)):
+        hit[_h, _c] = State.H6 + _i + _j
+    hit[_h, Card._A] = State.S15 + _i
+
+for _j, _c in enumerate(range(Card._2, Card._A)):
+    hit[State.H11, _c] = State.H13 + _j
+hit[State.H11, Card._A] = State.H12
+
+for _i, _h in enumerate(range(State.H12, State.H21)):
     for _j, _c in enumerate(range(Card._2, Card._T - _i)):
-        hit[_s, _c] = _s + 2 + _j
+        hit[_h, _c] = State.H14 + _i + _j
+    hit[_h, (Card._T - _i):Card._A] = State._BUST
+    hit[_h, Card._A] = State.H13 + _i
+
+hit[State.H21, :] = State._BUST
+
+for _i, _s in enumerate(range(State.S12, State.S21)):
+    for _j, _c in enumerate(range(Card._2, Card._T - _i)):
+        hit[_s, _c] = State.S14 + _i + _j
     for _j, _c in enumerate(range(Card._T - _i, Card._A)):
-        hit[_s, _c] = Player.H12 + _j
-    hit[_s, Card._A] = _s + 1
+        hit[_s, _c] = State.H12 +  _j
+    hit[_s, Card._A] = State.S13 + _i
 
 for _c, _j in enumerate(range(Card._2, Card._A)):
-    hit[Player.S21, _c] = Player.H13 + _j
-hit[Player.S21, Card._A] = Player.H12
+    hit[State.S21, _c] = State.H13 + _j
+hit[State.S21, Card._A] = State.H12
 
-hit[Player.BJ, :] = hit[Player.S21, :]
+hit[State.BJ, :] = hit[State.S21, :]
 
-hit[Player._BUST:, :] = Player._END
+for _c in range(State._BUST, State._BJ + 1):
+    hit[_c] = _c
 
-# Going from one state to the next state after 'standing'.
-stand = np.zeros(len(Player), dtype=int)
+# Going from one State to the next State after 'standing'.
+stand = np.full(len(State), State._16, dtype=int)
 
-stand[:Player.H17] = Player._16
+for _i, _h in enumerate(range(State.H17, State.H21 + 1)):
+    stand[_h] = State._17 + _i
 
-for _i, _h in enumerate(range(Player.H17, Player.H21 + 1)):
-    stand[_h] = Player._17 + _i
-stand[Player.T:Player.S17] = Player._16
+for _i, _s in enumerate(range(State.S17, State.S21 + 1)):
+    stand[_s] = State._17 + _i
 
-for _i, _s in enumerate(range(Player.S17, Player.S21 + 1)):
-    stand[_s] = Player._17 + _i
-stand[Player.BJ] = Player._BJ
+stand[State.BJ] = State._BJ
 
-stand[Player._BUST:] = Player._END
+for _c in range(State._BUST, State._BJ + 1):
+    stand[_c] = _c
 
-# Going from a Hand to a Count.
-count = np.zeros(len(Player), dtype=int)
-
-count[:len(Hand)] = stand[:len(Hand)] - len(Hand)
-
-for _s in range(Player._BUST, Player._BJ + 1):
-    count[_s] = _s - len(Hand)
-
-count[Player._END] = count[Player._BUST]
+# Going from a State to a Count.
+count = stand - State._BUST

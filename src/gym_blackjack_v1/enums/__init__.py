@@ -6,7 +6,6 @@
 from .action import Action, action_labels
 from .card import Card, card_labels
 from .count import Count, count_labels
-from .dealer import Dealer, dealer_labels
 from .hand import Hand, hand_labels
-from .player import Player, player_labels
-from .terminal import Terminal, terminal_labels
+from .single import Single, single_labels
+from .state import State, state_labels

@@ -8,14 +8,14 @@ import numpy as np
 from ..enums import Action, Hand
 
 # Deterministic policy for a dealer who stands on 17.
-stands_on_17 = np.full(len(Hand), Action.h)
+stands_on_17 = np.full(len(Hand), Action.HIT)
 
 for _h in range(Hand.H17, Hand.H21 + 1):
-    stands_on_17[_h] = Action.s
+    stands_on_17[_h] = Action.STAND
 
 for _s in range(Hand.S17, Hand.BJ + 1):
-    stands_on_17[_s] = Action.s
+    stands_on_17[_s] = Action.STAND
 
 # Deterministic policy for a dealer who hits on soft 17.
 hits_on_soft_17 = stands_on_17.copy()
-hits_on_soft_17[Hand.S17] = Action.h
+hits_on_soft_17[Hand.S17] = Action.HIT

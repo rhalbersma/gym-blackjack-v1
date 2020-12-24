@@ -8,7 +8,7 @@ from gym import spaces
 from gym.utils import seeding
 import numpy as np
 
-from ..enums import Action, Card, Count, Dealer, Hand, Player, Terminal, card_labels, dealer_labels, player_labels
+from ..enums import Action, Card, Count, Hand, State, card_labels, state_labels
 from ..utils import dealer, fsm, InfiniteDeck, model
 
 
@@ -24,9 +24,9 @@ class BlackjackEnv(gym.Env):
         Face cards count as 10, and an ace can count as either 1 ('hard') or 11 ('soft').
 
     Observations:
-        There are 34 * 10 = 340 discrete states:
-            34 player counts (NONE, H2-H21, T, A, S12-S21, BJ)
-            10 dealer cards showing (2-9, T, A)
+        There are 29 * 10 = 290 discrete observable states:
+            29 player hands: H4-H21, S12-S21, BJ
+            10 dealer cards: 2-9, T, A
 
     Actions:
         There are 2 actions for the player:
@@ -77,8 +77,8 @@ class BlackjackEnv(gym.Env):
             self.payout[Count._21, Count._BJ]          =  0     # A player's 21 and a dealer's blackjack are treated equally.
         self.dealer_policy = dealer.hits_on_soft_17 if dealer_hits_on_soft_17 else dealer.stands_on_17
         self.observation_space = spaces.Tuple((
-            spaces.Discrete(len(Hand)),                         # Only include transient Markov states because
-            spaces.Discrete(len(Card))                          # absorbing states don't need to be explored.
+            spaces.Discrete(len(Hand)),                         # Only include observable Markov states because hidden states have
+            spaces.Discrete(len(Card))                          # a fixed strategy and absorbing states don't need to be explored.
         ))
         self.action_space = spaces.Discrete(len(Action))
         self.reward_range = (np.min(self.payout), np.max(self.payout))
@@ -91,10 +91,6 @@ class BlackjackEnv(gym.Env):
     def _build_model(self):
         if not isinstance(self.deck, InfiniteDeck):
             raise TypeError(f'To build an env\'s model, its deck attribute needs to be of class type "InfiniteDeck" rather than "{type(self.deck).__name__}".')
-        self.state_space = spaces.Tuple((
-            spaces.Discrete(len(Player)),   # Include all transient and absorbing Markov states because
-            spaces.Discrete(len(Dealer))    # absorbing states will ensure termination of dynamic programming methods.
-        ))
         self.model, self.transition, self.reward = model.build(self.payout, self.dealer_policy, self.deck.prob)
 
     def seed(self, seed=None):
@@ -102,13 +98,13 @@ class BlackjackEnv(gym.Env):
         return [seed]
 
     def render(self, mode='human'):
-        p = player_labels[self.player]
+        p = state_labels[self.player]
         upcard_only = self.dealer in range(Card._2, Card._A + 1)
-        if self.player != Player._BUST and upcard_only:
-            d = dealer_labels[self.dealer]
+        if self.player != State._BUST and upcard_only:
+            d = card_labels[self.dealer]
             return f'player: {p:>4}; dealer: {d:>4};'
         else:
-            d = player_labels[fsm.hit[Player.NONE, self.dealer] if upcard_only else self.dealer]
+            d = state_labels[fsm.hit[State._DEAL, self.dealer] if upcard_only else self.dealer]
             R = self.payout[fsm.count[self.player], fsm.count[self.dealer]]
             return f'player: {p:>4}; dealer: {d:>4}; reward: {R:>+4}'
 
@@ -130,7 +126,7 @@ class BlackjackEnv(gym.Env):
             'player': [ card_labels[p1], card_labels[p2] ], 
             'dealer': [ card_labels[up] ] 
         }
-        self.player, self.dealer = fsm.hit[fsm.hit[Player.NONE, p1], p2], up
+        self.player, self.dealer = fsm.hit[fsm.hit[State._DEAL, p1], p2], up
         return self._get_obs()
 
     def step(self, action):
@@ -138,14 +134,14 @@ class BlackjackEnv(gym.Env):
             card = self.deck.draw()
             self.info['player'].append(card_labels[card])
             self.player = fsm.hit[self.player, card]
-            done = self.player == Player._BUST
+            done = self.player == State._BUST
         else:
-            self.dealer = fsm.hit[Player.NONE, self.dealer]
+            self.dealer = fsm.hit[State._DEAL, self.dealer]
             while True:
                 card = self.deck.draw()
                 self.info['dealer'].append(card_labels[card])
                 self.dealer = fsm.hit[self.dealer, card]
-                if self.dealer == Player._BUST or not self.dealer_policy[self.dealer]:
+                if self.dealer == State._BUST or not self.dealer_policy[self.dealer]:
                     break
             done = True
         reward = self.payout[fsm.count[self.player], fsm.count[self.dealer]] if done else 0
@@ -171,3 +167,4 @@ class BlackjackEnv(gym.Env):
             'dealer': [] 
         }
         return self._get_obs()
+

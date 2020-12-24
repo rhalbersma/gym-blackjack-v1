@@ -14,5 +14,5 @@ class AlwaysHitAgent:
         pass
 
     def act(self, obs, reward, done):
-        return Action.h
+        return Action.HIT
 

@@ -7,8 +7,8 @@ from aenum import IntEnum
 
 
 class Action(IntEnum):
-    s = 0
-    h = 1
+    STAND = 0
+    HIT   = 1
 
 
 action_labels = [ a.name[0] for a in Action ]

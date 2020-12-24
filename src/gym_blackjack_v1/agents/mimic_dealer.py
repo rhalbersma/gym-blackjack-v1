@@ -13,9 +13,9 @@ class MimicDealerAgent:
     A blackjack agent that mimics the dealer by standing on seventeen or more.
     """
     def __init__(self, env):
-        self.policy = np.full((len(Hand), len(Card)), Action.h)
-        self.policy[Hand.H17:(Hand.H21 + 1), :] = Action.s
-        self.policy[Hand.S17:(Hand.BJ  + 1), :] = Action.s
+        self.policy = np.full((len(Hand), len(Card)), Action.HIT)
+        self.policy[Hand.H17:(Hand.H21 + 1), :] = Action.STAND
+        self.policy[Hand.S17:(Hand.BJ  + 1), :] = Action.STAND
 
         self.observe = {
             'Blackjack-v0': (lambda obs: (Hand[('S' if obs[2] else 'H') + str(obs[0])], Card((obs[1] - 2) % 10))),

@@ -14,5 +14,5 @@ class AlwaysStandAgent:
         pass
 
     def act(self, obs, reward, done):
-        return Action.s
+        return Action.STAND
 

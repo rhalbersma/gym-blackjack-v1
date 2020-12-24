@@ -13,9 +13,9 @@ class StandOn20Agent:
     A blackjack agent that stands on 20 or higher (Sutton and Barto, 2018).
     """
     def __init__(self, env):
-        self.policy = np.full((len(Hand), len(Card)), Action.h)
-        self.policy[Hand.H20:(Hand.H21 + 1), :] = Action.s
-        self.policy[Hand.S20:(Hand.BJ  + 1), :] = Action.s
+        self.policy = np.full((len(Hand), len(Card)), Action.HIT)
+        self.policy[Hand.H20:(Hand.H21 + 1), :] = Action.STAND
+        self.policy[Hand.S20:(Hand.BJ  + 1), :] = Action.STAND
 
         self.observe = {
             'Blackjack-v0': (lambda obs: (Hand[('S' if obs[2] else 'H') + str(obs[0])], Card((obs[1] - 2) % 10))),

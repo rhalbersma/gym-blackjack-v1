@@ -9,7 +9,7 @@ import gym
 import statsmodels.stats.weightstats as ssw
 
 from ..agents import BasicStrategyAgent
-from ..enums import Action
+from ..enums import Action, action_labels
 
 
 def play(env, episodes=100, hint=False):
@@ -38,17 +38,17 @@ def play(env, episodes=100, hint=False):
             print(env.render(), end=' ')
             if hint:
                 a0 = agent.act(obs, reward, done)
-                k = input(f'action: [hint: {Action(a0).name}] ')
+                k = input(f'action: [hint: {action_labels[a0].lower()}] ')
             else:
                 a0 = 0
                 k = input(f'action: ')
             try:
-                a = Action(int(k))  # try 0/1
+                a = Action(int(k))
             except ValueError:
                 try:
-                    a = Action[k]   # try s/h
+                    a = Action[action_labels.index(k.upper())]
                 except KeyError:
-                    a = a0          # fallback to the Basic Strategy
+                    a = a0
             obs, reward, done, _ = env.step(a)
             total += reward
             if done:

@@ -13,12 +13,12 @@ class BasicStrategyAgent:
     A blackjack agent that plays according to the Basic Strategy (Thorp, 1966).
     """
     def __init__(self, env):
-        self.policy = np.full((len(Hand), len(Card)), Action.h)
-        self.policy[Hand.H13:(Hand.H21 + 1), Card._2:(Card._3 + 1)] = Action.s
-        self.policy[Hand.H12:(Hand.H21 + 1), Card._4:(Card._6 + 1)] = Action.s
-        self.policy[Hand.H17:(Hand.H21 + 1), Card._7:(Card._A + 1)] = Action.s
-        self.policy[Hand.S18:(Hand.BJ  + 1), Card._2:(Card._8 + 1)] = Action.s
-        self.policy[Hand.S19:(Hand.BJ  + 1), Card._9:(Card._A + 1)] = Action.s
+        self.policy = np.full((len(Hand), len(Card)), Action.HIT)
+        self.policy[Hand.H13:(Hand.H21 + 1), Card._2:(Card._3 + 1)] = Action.STAND
+        self.policy[Hand.H12:(Hand.H21 + 1), Card._4:(Card._6 + 1)] = Action.STAND
+        self.policy[Hand.H17:(Hand.H21 + 1), Card._7:(Card._A + 1)] = Action.STAND
+        self.policy[Hand.S18:(Hand.BJ  + 1), Card._2:(Card._8 + 1)] = Action.STAND
+        self.policy[Hand.S19:(Hand.BJ  + 1), Card._9:(Card._A + 1)] = Action.STAND
 
         self.observe = {
             'Blackjack-v0': (lambda obs: (Hand[('S' if obs[2] else 'H') + str(obs[0])], Card((obs[1] - 2) % 10))),
