@@ -18,3 +18,4 @@ class Count(IntEnum):
 
 
 count_labels = [ c.name[1:] for c in Count ]
+count_labels[Count._16] = '<17'

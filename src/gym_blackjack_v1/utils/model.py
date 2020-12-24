@@ -5,8 +5,8 @@
 
 import numpy as np
 
-from gym_blackjack_v1.enums import Action, Card, Count, Hand, State
-from gym_blackjack_v1.utils import fsm
+from ..enums import Action, Card, Count, Hand, State
+from ..utils import fsm
 
 ################################################################################
 # Although we have complete knowledge of the environment in the blackjack task, 

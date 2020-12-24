@@ -4,8 +4,8 @@
 #          http://www.boost.org/LICENSE_1_0.txt)
 
 from .always_hit import AlwaysHitAgent
+from .always_stand import AlwaysStandAgent
+from .basic_strategy import BasicStrategyAgent
+from .mimic_dealer import MimicDealerAgent
 from .random_play import RandomPlayAgent
 from .stand_on_20 import StandOn20Agent
-from .always_stand import AlwaysStandAgent
-from .mimic_dealer import MimicDealerAgent
-from .basic_strategy import BasicStrategyAgent

@@ -5,7 +5,7 @@
 
 import numpy as np
 
-from ..enums import Hand, Card, Action
+from ..enums import Action, Card, Hand
 
 
 class MimicDealerAgent:
