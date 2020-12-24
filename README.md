@@ -43,7 +43,7 @@ The above code will output the distribution of outcomes (win, loss, tie), the me
 >>> stats = bj.simulate(agent, env)
 100%|██████████████████████████████| 1000000/1000000 [00:28<00:00, 35182.52it/s]
 >>> dict(zip(stats.data, stats.weights / stats.sum_weights)), stats.mean, stats.tconfint_mean()
-({-1.0: 480046.0, 1.0: 432712.0, 0.0: 87242.0}, -0.047334, (-0.049204221221545476, -0.045463778778454526))
+({0.0: 0.087323, -1.0: 0.479979, 1.0: 0.432698}, -0.047281, (-0.04915114318214309, -0.04541085681785691))
 </pre>
 
 A player using the basic strategy will approximately lose 48.0%, win 43.3% and tie 8.7% of all hands, for a mean score per hand of -4.73%, give or take 0.19%.
