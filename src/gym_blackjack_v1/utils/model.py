@@ -52,18 +52,18 @@ def upcard_transitions():
 def upcard_counts(fsm, prob):
     # Construct an absorbing Markov chain from the FSM and the card probabilities
     # https://en.wikipedia.org/wiki/Absorbing_Markov_chain
-    P_s_s = state_transitions(fsm, prob)
-    Q_h_h = P_s_s[:-len(Count), :-len(Count)]
-    R_h_c = P_s_s[:-len(Count), -len(Count):]
-    I_h_h = np.identity(len(State) - len(Count))
+    P = state_transitions(fsm, prob)
+    Q = P[:-len(Count), :-len(Count)]
+    R = P[:-len(Count), -len(Count):]
 
     # Compute the absorbing probabilities
     # https://en.wikipedia.org/wiki/Absorbing_Markov_chain#Absorbing_probabilities 
-    N_h_h = np.linalg.inv(I_h_h - Q_h_h)
-    B_h_c = N_h_h @ R_h_c
+    I = np.identity(len(State) - len(Count))
+    N = np.linalg.inv(I - Q)
+    B = N @ R
+    assert np.isclose(B.sum(axis=-1), 1).all()
 
-    prob_uc_h = upcard_transitions()
-    p = prob_uc_h @ B_h_c
+    p = upcard_transitions() @ B
     assert np.isclose(p.sum(axis=-1), 1).all()
     return p
 
