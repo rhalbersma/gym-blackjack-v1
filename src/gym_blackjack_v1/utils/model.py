@@ -97,7 +97,7 @@ def build(payout, dealer_policy, prob):
     # p(s', r|s, a): probability of transition to state s' with reward r, from state s and action a
     model = np.zeros((len(Hand) * len(Card) + 1, len(Action), len(Reward), len(Hand) * len(Card) + 1))    
     model[:-1, Action.HIT, no_reward, :-1] = prob_h_c_a_r_h_c[:, :, Action.HIT, no_reward, :, :].reshape((len(Hand) * len(Card), len(Hand) * len(Card)))
-    model[:-1, :,          :,          -1] = prob_h_c_a_r[:, :, :, :].reshape((len(Hand) * len(Card), len(Action), len(Reward)))
+    model[:-1, :,          :,          -1] = prob_h_c_a_r.reshape((len(Hand) * len(Card), -1))
     model[ -1, :,          no_reward,  -1] = 1
     assert np.isclose(model.sum(axis=(2, 3)), 1).all()
 
