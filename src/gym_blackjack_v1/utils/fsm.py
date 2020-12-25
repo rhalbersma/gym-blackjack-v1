@@ -87,5 +87,8 @@ stand[State.BJ] = State._BJ
 for _c in range(State._BUST, State._BJ + 1):
     stand[_c] = _c
 
+# Combined FSM for model-building
+stand_hit = np.array([a for a in np.broadcast_arrays(stand.reshape(-1, 1), hit)])
+
 # Going from a State to a Count.
 count = stand - State._BUST

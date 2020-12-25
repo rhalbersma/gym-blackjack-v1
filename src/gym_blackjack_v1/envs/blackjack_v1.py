@@ -85,13 +85,8 @@ class BlackjackEnv(gym.Env):
         self.seed()
         self.deck = InfiniteDeck(self.np_random)
         if model_based:
-            self._build_model()
+            self.model, self.transition, self.reward = model.build(self)
         self.reset()
-
-    def _build_model(self):
-        if not isinstance(self.deck, InfiniteDeck):
-            raise TypeError(f'To build an env\'s model, its deck attribute needs to be of class type "InfiniteDeck" rather than "{type(self.deck).__name__}".')
-        self.model, self.transition, self.reward = model.build(self.payout, self.dealer_policy, self.deck.prob)
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)

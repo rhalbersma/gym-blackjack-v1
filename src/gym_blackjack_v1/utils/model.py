@@ -49,7 +49,17 @@ def upcard_transitions():
     return p
 
 
-def upcard_counts(fsm, prob):
+def one_hot_encode(policy):
+    one_hot = np.zeros((policy.size, policy.max() + 1), dtype=int)
+    one_hot[np.arange(policy.size), policy] = 1
+    return one_hot
+
+
+def fsm_policy(fsm_array, one_hot_policy):
+    return (fsm_array * np.expand_dims(one_hot_policy, axis=0).T).sum(axis=0)
+
+
+def hand_counts(fsm, prob):
     # Construct an absorbing Markov chain from the FSM and the card probabilities
     # https://en.wikipedia.org/wiki/Absorbing_Markov_chain
     P = state_transitions(fsm, prob)
@@ -62,27 +72,16 @@ def upcard_counts(fsm, prob):
     N = np.linalg.inv(I - Q)
     B = N @ R
     assert np.isclose(B.sum(axis=-1), 1).all()
-
-    p = upcard_transitions() @ B
-    assert np.isclose(p.sum(axis=-1), 1).all()
-    return p
+    return B
 
 
-def one_hot_policy(policy):
-    one_hot = np.zeros((policy.size, policy.max() + 1), dtype=int)
-    one_hot[np.arange(policy.size), policy] = 1
-    return one_hot
+def build(env):
+    prob_s_a_s = state_action_transitions(fsm.stand_hit, env.deck.prob)
+    dealer_one_hot = one_hot_encode(np.resize(env.dealer_policy, len(State)))
+    dealer_fsm = fsm_policy(fsm.stand_hit, dealer_one_hot)
+    dealer_counts = upcard_transitions() @ hand_counts(dealer_fsm, env.deck.prob)
 
-
-def build(payout, dealer_policy, prob):
-    fsm_array = np.array([a for a in np.broadcast_arrays(fsm.stand.reshape(-1, 1), fsm.hit)])
-    prob_s_a_s = state_action_transitions(fsm_array, prob)
-
-    dealer_policy_one_hot = one_hot_policy(np.resize(dealer_policy, len(State)))
-    dealer_fsm = (fsm_array * np.expand_dims(dealer_policy_one_hot, axis=0).T).sum(axis=0)
-    prob_c_uc = upcard_counts(dealer_fsm, prob).T
-
-    Reward = np.unique(payout)
+    Reward = np.unique(env.payout)
     no_reward = np.where(Reward == 0)[0][0]
 
     prob_h_c_a_r_h_c = np.zeros((len(Hand), len(Card), len(Action), len(Reward), len(Hand), len(Card)))
@@ -92,12 +91,12 @@ def build(payout, dealer_policy, prob):
     prob_h_c_a_r = np.zeros((len(Hand), len(Card), len(Action), len(Reward)))
     for uc in Card:
         for i, r in enumerate(Reward):
-            prob_h_c_a_r[:, uc, :, i] = prob_s_a_s[:len(Hand), :, -len(Count):] @ (payout == r) @ prob_c_uc[:, uc]
+            prob_h_c_a_r[:, uc, :, i] = prob_s_a_s[:len(Hand), :, -len(Count):] @ (env.payout == r) @ dealer_counts[uc].T
 
     # p(s', r|s, a): probability of transition to state s' with reward r, from state s and action a
     model = np.zeros((len(Hand) * len(Card) + 1, len(Action), len(Reward), len(Hand) * len(Card) + 1))    
     model[:-1, Action.HIT, no_reward, :-1] = prob_h_c_a_r_h_c[:, :, Action.HIT, no_reward, :, :].reshape((len(Hand) * len(Card), len(Hand) * len(Card)))
-    model[:-1, :,          :,          -1] = prob_h_c_a_r.reshape((len(Hand) * len(Card), -1))
+    model[:-1, :,          :,          -1] = prob_h_c_a_r.reshape((len(Hand) * len(Card), len(Action), len(Reward)))
     model[ -1, :,          no_reward,  -1] = 1
     assert np.isclose(model.sum(axis=(2, 3)), 1).all()
 
