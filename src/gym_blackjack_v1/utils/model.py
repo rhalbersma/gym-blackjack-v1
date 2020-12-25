@@ -86,13 +86,13 @@ def build(payout, dealer_policy, prob):
     no_reward = np.where(Reward == 0)[0][0]
 
     prob_h_c_a_r_h_c = np.zeros((len(Hand), len(Card), len(Action), len(Reward), len(Hand), len(Card)))
-    for _uc in Card:
-        prob_h_c_a_r_h_c[:, _uc, Action.HIT, no_reward, :, _uc] = prob_s_a_s[:len(Hand), Action.HIT, :len(Hand)]
+    for uc in Card:
+        prob_h_c_a_r_h_c[:, uc, Action.HIT, no_reward, :, uc] = prob_s_a_s[:len(Hand), Action.HIT, :len(Hand)]
 
     prob_h_c_a_r = np.zeros((len(Hand), len(Card), len(Action), len(Reward)))
-    for _uc in Card:
-        for _i, _r in enumerate(Reward):
-            prob_h_c_a_r[:, _uc, :, _i] = prob_s_a_s[:len(Hand), :, -len(Count):] @ (payout == _r) @ prob_c_uc[:, _uc]
+    for uc in Card:
+        for i, r in enumerate(Reward):
+            prob_h_c_a_r[:, uc, :, i] = prob_s_a_s[:len(Hand), :, -len(Count):] @ (payout == r) @ prob_c_uc[:, uc]
 
     # p(s', r|s, a): probability of transition to state s' with reward r, from state s and action a
     model = np.zeros((len(Hand) * len(Card) + 1, len(Action), len(Reward), len(Hand) * len(Card) + 1))    
