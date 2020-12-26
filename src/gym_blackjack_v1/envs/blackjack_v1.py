@@ -85,7 +85,7 @@ class BlackjackEnv(gym.Env):
         self.seed()
         self.deck = InfiniteDeck(self.np_random)
         if model_based:
-            self.model, self.transition, self.reward = model.build(self)
+            self.model, self.start, self.transition, self.reward = model.build(self)
         self.reset()
 
     def seed(self, seed=None):

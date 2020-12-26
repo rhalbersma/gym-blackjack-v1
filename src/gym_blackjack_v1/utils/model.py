@@ -76,10 +76,15 @@ def hand_counts(fsm, prob):
 
 
 def build(env):
-    prob_s_a_s = state_action_transitions(fsm.stand_hit, env.deck.prob)
+    card_prob = env.deck.prob
+    prob_s_a_s = state_action_transitions(fsm.stand_hit, card_prob)
+    hand_prob = np.linalg.matrix_power(prob_s_a_s[:, Action.HIT, :], 2)[State._DEAL, :len(Hand)]
+    start = hand_prob.reshape(-1, 1) * card_prob.reshape(1, -1)
+    assert np.isclose(start.sum(), 1)
+
     dealer_one_hot = one_hot_encode(np.resize(env.dealer_policy, len(State)))
     dealer_fsm = fsm_policy(fsm.stand_hit, dealer_one_hot)
-    dealer_counts = upcard_transitions() @ hand_counts(dealer_fsm, env.deck.prob)
+    dealer_counts = upcard_transitions() @ hand_counts(dealer_fsm, card_prob)
 
     Reward = np.unique(env.payout)
     no_reward = np.where(Reward == 0)[0][0]
@@ -107,5 +112,5 @@ def build(env):
     # r(s, a): expected immediate reward from state s after action a
     reward = model.sum(axis=3) @ Reward
 
-    return model, transition, reward
+    return model, start, transition, reward
 
