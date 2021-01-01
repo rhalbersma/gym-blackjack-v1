@@ -1,4 +1,4 @@
-#          Copyright Rein Halbersma 2020.
+#          Copyright Rein Halbersma 2020-2021.
 # Distributed under the Boost Software License, Version 1.0.
 #    (See accompanying file LICENSE_1_0.txt or copy at
 #          http://www.boost.org/LICENSE_1_0.txt)
@@ -85,7 +85,7 @@ class BlackjackEnv(gym.Env):
         self.seed()
         self.deck = InfiniteDeck(self.np_random)
         if model_based:
-            self.model, self.start, self.transition, self.reward = model.build(self)
+            self.nS, self.nA, self.model, self.isd, self.transition, self.reward = model.build(self)
         self.reset()
 
     def seed(self, seed=None):

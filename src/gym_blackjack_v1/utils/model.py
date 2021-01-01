@@ -1,4 +1,4 @@
-#          Copyright Rein Halbersma 2020.
+#          Copyright Rein Halbersma 2020-2021.
 # Distributed under the Boost Software License, Version 1.0.
 #    (See accompanying file LICENSE_1_0.txt or copy at
 #          http://www.boost.org/LICENSE_1_0.txt)
@@ -9,14 +9,14 @@ from ..enums import Action, Card, Count, Hand, State
 from ..utils import fsm
 
 ################################################################################
-# Although we have complete knowledge of the environment in the blackjack task, 
-# it would not be easy to apply DP methods to compute the value function. 
-# DP methods require the distribution of next events — in particular, they 
-# require the environments dynamics as given by the four-argument function p — 
-# and it is not easy to determine this for blackjack. For example, suppose the 
-# player’s sum is 14 and he chooses to stick. What is his probability of 
-# terminating with a reward of +1 as a function of the dealer’s showing card? 
-# All of the probabilities must be computed before DP can be applied, and such 
+# Although we have complete knowledge of the environment in the blackjack task,
+# it would not be easy to apply DP methods to compute the value function.
+# DP methods require the distribution of next events — in particular, they
+# require the environments dynamics as given by the four-argument function p —
+# and it is not easy to determine this for blackjack. For example, suppose the
+# player’s sum is 14 and he chooses to stick. What is his probability of
+# terminating with a reward of +1 as a function of the dealer’s showing card?
+# All of the probabilities must be computed before DP can be applied, and such
 # computations are often complex and error-prone.
 #
 # Sutton & Barto, Reinforcement Learning, p. 94.
@@ -67,7 +67,7 @@ def hand_counts(fsm, prob):
     R = P[:-len(Count), -len(Count):]
 
     # Compute the absorbing probabilities
-    # https://en.wikipedia.org/wiki/Absorbing_Markov_chain#Absorbing_probabilities 
+    # https://en.wikipedia.org/wiki/Absorbing_Markov_chain#Absorbing_probabilities
     I = np.identity(len(State) - len(Count))
     N = np.linalg.inv(I - Q)
     B = N @ R
@@ -76,11 +76,15 @@ def hand_counts(fsm, prob):
 
 
 def build(env):
+    nS = len(Hand) * len(Card)
+    nA = len(Action)
+
+    # Compute the initial state distribution.
     card_prob = env.deck.prob
     prob_s_a_s = state_action_transitions(fsm.stand_hit, card_prob)
     hand_prob = np.linalg.matrix_power(prob_s_a_s[:, Action.HIT, :], 2)[State._DEAL, :len(Hand)]
-    start = hand_prob.reshape(-1, 1) * card_prob.reshape(1, -1)
-    assert np.isclose(start.sum(), 1)
+    isd = (hand_prob.reshape(-1, 1) * card_prob.reshape(1, -1)).reshape(len(Hand) * len(Card))
+    assert np.isclose(isd.sum(), 1)
 
     dealer_one_hot = one_hot_encode(np.resize(env.dealer_policy, len(State)))
     dealer_fsm = fsm_policy(fsm.stand_hit, dealer_one_hot)
@@ -99,7 +103,7 @@ def build(env):
             prob_h_c_a_r[:, uc, :, i] = prob_s_a_s[:len(Hand), :, -len(Count):] @ (env.payout == r) @ dealer_counts[uc].T
 
     # p(s', r|s, a): probability of transition to state s' with reward r, from state s and action a
-    model = np.zeros((len(Hand) * len(Card) + 1, len(Action), len(Reward), len(Hand) * len(Card) + 1))    
+    model = np.zeros((len(Hand) * len(Card) + 1, len(Action), len(Reward), len(Hand) * len(Card) + 1))
     model[:-1, Action.HIT, no_reward, :-1] = prob_h_c_a_r_h_c[:, :, Action.HIT, no_reward, :, :].reshape((len(Hand) * len(Card), len(Hand) * len(Card)))
     model[:-1, :,          :,          -1] = prob_h_c_a_r.reshape((len(Hand) * len(Card), len(Action), len(Reward)))
     model[ -1, :,          no_reward,  -1] = 1
@@ -112,5 +116,5 @@ def build(env):
     # r(s, a): expected immediate reward from state s after action a
     reward = model.sum(axis=3) @ Reward
 
-    return model, start, transition, reward
+    return nS, nA, model, isd, transition, reward
 
