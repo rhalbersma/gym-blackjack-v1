@@ -3,6 +3,8 @@
 #    (See accompanying file LICENSE_1_0.txt or copy at
 #          http://www.boost.org/LICENSE_1_0.txt)
 
+from itertools import product
+
 import numpy as np
 
 from ..enums import Action, Card, Hand, Markov, Terminal, nA, nC, nH, nM, nT
@@ -21,6 +23,14 @@ from ..utils import fsm
 #
 # Sutton & Barto, Reinforcement Learning, p. 94.
 ################################################################################
+
+
+def inifinite_deck():
+    cards = np.array([ c for c in range(Card._2, Card._T) ] + 4 * [ Card._T ] + [ Card._A ])
+    _, counts = np.unique(cards, return_counts=True)
+    p = counts / counts.sum()
+    assert np.isclose(p.sum(), 1)
+    return p
 
 
 def markov_state_transitions(fsm, prob):
@@ -80,11 +90,12 @@ def build(env):
     done = -1
 
     # Compute the initial state distribution.
-    card_prob = env.deck.prob
+    card_prob = inifinite_deck()
     prob_m_a_m = markov_state_action_transitions(fsm.stand_hit, card_prob)
     hand_prob = np.linalg.matrix_power(prob_m_a_m[:, Action.HIT, :], 2)[Markov._DEAL, :nH]
     isd = (hand_prob.reshape(-1, 1) * card_prob.reshape(1, -1)).reshape(nS)
     assert np.isclose(isd.sum(), 1)
+    is_cdf = isd.cumsum()
 
     dealer_one_hot = one_hot_encode(np.resize(env.dealer_policy, nM))
     dealer_fsm = fsm_policy(fsm.stand_hit, dealer_one_hot)
@@ -133,5 +144,16 @@ def build(env):
         for s in range(nS)
     }
 
-    return nS, nA, P, isd, transition, reward
+    next_reward_cdf = {
+        s: {
+            a: np.array([
+                t[0]
+                for t in P[s][a]
+            ]).cumsum()
+            for a in range(nA)
+        }
+        for s in range(nS)
+    }
+
+    return nS, nA, P, isd, next_reward_cdf, is_cdf, transition, reward
 

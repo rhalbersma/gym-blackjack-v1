@@ -10,7 +10,7 @@ from ..enums import Action, Card, Hand, nC, nH
 
 class BasicStrategyAgent:
     """
-    A blackjack agent that plays according to the Basic Strategy (Thorp, 1966).
+    A blackjack agent that plays according to the Basic Strategy of Thorp (1966).
     """
     def __init__(self, env):
         self.policy = np.full((nH, nC), Action.HIT)
@@ -20,11 +20,11 @@ class BasicStrategyAgent:
         self.policy[Hand.S18:(Hand.BJ  + 1), Card._2:(Card._8 + 1)] = Action.STAND
         self.policy[Hand.S19:(Hand.BJ  + 1), Card._9:(Card._A + 1)] = Action.STAND
 
-        self.observe = {
-            'Blackjack-v0': (lambda obs: (Hand[('S' if obs[2] else 'H') + str(obs[0])], Card((obs[1] - 2) % 10))),
-            'Blackjack-v1': (lambda obs: obs)
+        self.decode = {
+            'Blackjack-v0': (lambda obs: (Hand[('S' if obs[2] else 'H') + str(obs[0])], Card((obs[1] - 2) % nC))),
+            'Blackjack-v1': (lambda obs: divmod(obs, nC))
         }[env.unwrapped.spec.id]
 
     def act(self, obs, reward, done):
-        return self.policy[self.observe(obs)]
+        return self.policy[self.decode(obs)]
 

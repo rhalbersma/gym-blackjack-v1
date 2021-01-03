@@ -9,7 +9,7 @@ from gym.utils import seeding
 import numpy as np
 
 from ..enums import Action, Card, Hand, Markov, Terminal, card_labels, markov_labels, nA, nC, nH, nT
-from ..utils import dealer, fsm, InfiniteDeck, model
+from ..utils import dealer, fsm, model
 
 
 class BlackjackEnv(gym.Env):
@@ -75,38 +75,35 @@ class BlackjackEnv(gym.Env):
             self.payoff[Terminal._21, Terminal._BJ] =  0    # A player's 21 and a dealer's blackjack are treated equally.
         self.reward_range = (np.min(self.payoff), np.max(self.payoff))
         self.dealer_policy = dealer.hits_on_soft_17 if dealer_hits_on_soft_17 else dealer.stands_on_17
-        self.seed()
-        self.deck = InfiniteDeck(self.np_random)
-        self.nS, self.nA, self.P, self.isd, self.transition, self.reward = model.build(self)
+        self.observation_shape = (nH, nC)
+        self.nS, self.nA, self.P, self.isd, self.next_reward_cdf, self.is_cdf, self.transition, self.reward = model.build(self)
         self.observation_space = spaces.Discrete(self.nS)
         self.action_space = spaces.Discrete(self.nA)
-        self.observation_shape = (nH, nC)
+        self.seed()
         self.reset()
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
 
-    def _get_obs(self):
-        return self.player, self.dealer
+    def _sample_from_cumulative_categorical(self, cdf):
+        """
+        Sample from a cumulative categorical distribution.
+        """
+        return (cdf > self.np_random.rand()).argmax()
+
+    def step(self, a):
+        next_reward_cdf = self.next_reward_cdf[self.s][a]
+        next_reward_idx = self._sample_from_cumulative_categorical(next_reward_cdf)
+        prob, next, reward, done = self.P[self.s][a][next_reward_idx]
+        self.s = next
+        self.lastaction = a
+        return next, reward, done, { 'prob': prob }
 
     def reset(self):
-        """
-        Reset the state of the environment by drawing two player cards and one dealer card.
-
-        Returns:
-            observation (object): the player's hand and the dealer's upcard.
-
-        Notes:
-            Cards are drawn from a single deck with replacement (i.e. from an infinite deck).
-        """
-        p1, p2, up = self.deck.deal()
-        self.info = { 
-            'player': [ card_labels[p1], card_labels[p2] ], 
-            'dealer': [ card_labels[up] ] 
-        }
-        self.player, self.dealer = fsm.hit[fsm.hit[Markov._DEAL, p1], p2], up
-        return self._get_obs()
+        self.s = self._sample_from_cumulative_categorical(self.is_cdf)
+        self.lastaction = None
+        return self.s
 
     def explore(self, start):
         """
@@ -122,39 +119,7 @@ class BlackjackEnv(gym.Env):
             This is an extension of the OpenAI Gym interface.
             Monte Carlo Exploring Starts should use this method instead of reset().
         """
-        self.player, self.dealer = start
-        self.info = { 
-            'player': [], 
-            'dealer': [] 
-        }
-        return self._get_obs()
-
-    def step(self, action):
-        if action:
-            card = self.deck.draw()
-            self.info['player'].append(card_labels[card])
-            self.player = fsm.hit[self.player, card]
-            done = self.player == Markov._BUST
-        else:
-            self.dealer = fsm.hit[Markov._DEAL, self.dealer]
-            while True:
-                card = self.deck.draw()
-                self.info['dealer'].append(card_labels[card])
-                self.dealer = fsm.hit[self.dealer, card]
-                if self.dealer == Markov._BUST or not self.dealer_policy[self.dealer]:
-                    break
-            done = True
-        reward = self.payoff[fsm.count[self.player], fsm.count[self.dealer]] if done else 0
-        return self._get_obs(), reward, done, self.info
-
-    def render(self, mode='human'):
-        p = markov_labels[self.player]
-        upcard_only = self.dealer in range(Card._2, Card._A + 1)
-        if self.player != Markov._BUST and upcard_only:
-            d = card_labels[self.dealer]
-            return f'player: {p:>4}; dealer: {d:>4};'
-        else:
-            d = markov_labels[fsm.hit[Markov._DEAL, self.dealer] if upcard_only else self.dealer]
-            R = self.payoff[fsm.count[self.player], fsm.count[self.dealer]]
-            return f'player: {p:>4}; dealer: {d:>4}; reward: {R:>+4}'
+        self.s = start
+        self.lastaction = None
+        return self.s
 
