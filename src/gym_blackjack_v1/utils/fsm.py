@@ -5,7 +5,7 @@
 
 import numpy as np
 
-from ..enums import Card, State
+from ..enums import Card, Markov, nC, nM
 
 ################################################################################
 # Factor all transition logic into a finite-state machine (FSM) lookup table.
@@ -16,79 +16,79 @@ from ..enums import Card, State
 # 2) combining the FSM with card probabilities leads to a model-based version.
 ################################################################################
 
-# Going from a State to the next State after 'hitting' another Card.
-hit = np.full((len(State), len(Card)), -1, dtype=int)
+# Going from a Markov state to the next after 'hitting' another Card.
+hit = np.full((nM, nC), -1, dtype=int)
 
-hit[State._DEAL, Card._2] = State._DEUCE
-hit[State._DEAL, Card._3] = State._TREY
-hit[State._DEAL, Card._T] = State._TEN
-hit[State._DEAL, Card._A] = State._ACE
+hit[Markov._DEAL, Card._2] = Markov._DEUCE
+hit[Markov._DEAL, Card._3] = Markov._TREY
+hit[Markov._DEAL, Card._T] = Markov._TEN
+hit[Markov._DEAL, Card._A] = Markov._ACE
 for _j, _c in enumerate(range(Card._4, Card._T)):
-    hit[State._DEAL, _c] = State.H4 + _j
+    hit[Markov._DEAL, _c] = Markov.H4 + _j
 
-for _i, _h in enumerate((State._DEUCE, State._TREY)):
+for _i, _h in enumerate((Markov._DEUCE, Markov._TREY)):
     for _j, _c in enumerate(range(Card._2, Card._A)):
-        hit[_h, _c] = State.H4 + _i + _j
-    hit[_h, Card._A] = State.S13 + _i
+        hit[_h, _c] = Markov.H4 + _i + _j
+    hit[_h, Card._A] = Markov.S13 + _i
 
 for _j, _c in enumerate(range(Card._2, Card._A)):
-    hit[State._TEN, _c] = State.H12 + _j
-hit[State._TEN, Card._A] = State.BJ
+    hit[Markov._TEN, _c] = Markov.H12 + _j
+hit[Markov._TEN, Card._A] = Markov.BJ
 
 for _j, _c in enumerate(range(Card._2, Card._T)):
-    hit[State._ACE, _c] = State.S13 + _j
-hit[State._ACE, Card._T] = State.BJ
-hit[State._ACE, Card._A] = State.S12
+    hit[Markov._ACE, _c] = Markov.S13 + _j
+hit[Markov._ACE, Card._T] = Markov.BJ
+hit[Markov._ACE, Card._A] = Markov.S12
 
-for _i, _h in enumerate(range(State.H4, State.H11)):
+for _i, _h in enumerate(range(Markov.H4, Markov.H11)):
     for _j, _c in enumerate(range(Card._2, Card._A)):
-        hit[_h, _c] = State.H6 + _i + _j
-    hit[_h, Card._A] = State.S15 + _i
+        hit[_h, _c] = Markov.H6 + _i + _j
+    hit[_h, Card._A] = Markov.S15 + _i
 
 for _j, _c in enumerate(range(Card._2, Card._A)):
-    hit[State.H11, _c] = State.H13 + _j
-hit[State.H11, Card._A] = State.H12
+    hit[Markov.H11, _c] = Markov.H13 + _j
+hit[Markov.H11, Card._A] = Markov.H12
 
-for _i, _h in enumerate(range(State.H12, State.H21)):
+for _i, _h in enumerate(range(Markov.H12, Markov.H21)):
     for _j, _c in enumerate(range(Card._2, Card._T - _i)):
-        hit[_h, _c] = State.H14 + _i + _j
-    hit[_h, (Card._T - _i):Card._A] = State._BUST
-    hit[_h, Card._A] = State.H13 + _i
+        hit[_h, _c] = Markov.H14 + _i + _j
+    hit[_h, (Card._T - _i):Card._A] = Markov._BUST
+    hit[_h, Card._A] = Markov.H13 + _i
 
-hit[State.H21, :] = State._BUST
+hit[Markov.H21, :] = Markov._BUST
 
-for _i, _s in enumerate(range(State.S12, State.S21)):
+for _i, _s in enumerate(range(Markov.S12, Markov.S21)):
     for _j, _c in enumerate(range(Card._2, Card._T - _i)):
-        hit[_s, _c] = State.S14 + _i + _j
+        hit[_s, _c] = Markov.S14 + _i + _j
     for _j, _c in enumerate(range(Card._T - _i, Card._A)):
-        hit[_s, _c] = State.H12 +  _j
-    hit[_s, Card._A] = State.S13 + _i
+        hit[_s, _c] = Markov.H12 +  _j
+    hit[_s, Card._A] = Markov.S13 + _i
 
 for _c, _j in enumerate(range(Card._2, Card._A)):
-    hit[State.S21, _c] = State.H13 + _j
-hit[State.S21, Card._A] = State.H12
+    hit[Markov.S21, _c] = Markov.H13 + _j
+hit[Markov.S21, Card._A] = Markov.H12
 
-hit[State.BJ, :] = hit[State.S21, :]
+hit[Markov.BJ, :] = hit[Markov.S21, :]
 
-for _c in range(State._BUST, State._BJ + 1):
+for _c in range(Markov._BUST, Markov._BJ + 1):
     hit[_c] = _c
 
-# Going from one State to the next State after 'standing'.
-stand = np.full(len(State), State._16, dtype=int)
+# Going from one Markov state to the next after 'standing'.
+stand = np.full(nM, Markov._16, dtype=int)
 
-for _i, _h in enumerate(range(State.H17, State.H21 + 1)):
-    stand[_h] = State._17 + _i
+for _i, _h in enumerate(range(Markov.H17, Markov.H21 + 1)):
+    stand[_h] = Markov._17 + _i
 
-for _i, _s in enumerate(range(State.S17, State.S21 + 1)):
-    stand[_s] = State._17 + _i
+for _i, _s in enumerate(range(Markov.S17, Markov.S21 + 1)):
+    stand[_s] = Markov._17 + _i
 
-stand[State.BJ] = State._BJ
+stand[Markov.BJ] = Markov._BJ
 
-for _c in range(State._BUST, State._BJ + 1):
+for _c in range(Markov._BUST, Markov._BJ + 1):
     stand[_c] = _c
 
 # Combined FSM for model-building
 stand_hit = np.array([a for a in np.broadcast_arrays(stand.reshape(-1, 1), hit)])
 
-# Going from a State to a Count.
-count = stand - State._BUST
+# Going from a Markov state to a Count.
+count = stand - Markov._BUST

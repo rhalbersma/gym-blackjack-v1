@@ -20,3 +20,5 @@ class Card(IntEnum):
 
 
 card_labels = [ c.name[1:] for c in Card ]
+
+nC = len(Card)

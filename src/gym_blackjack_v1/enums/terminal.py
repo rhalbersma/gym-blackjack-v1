@@ -6,7 +6,7 @@
 from aenum import IntEnum
 
 
-class Count(IntEnum):
+class Terminal(IntEnum):
     _BUST =  0 # all counts above 21
     _16   =  1 # all counts below 17
     _17   =  2
@@ -17,5 +17,7 @@ class Count(IntEnum):
     _BJ   =  7 # 21 with the first 2 cards
 
 
-count_labels = [ c.name[1:] for c in Count ]
-count_labels[Count._16] = '<17'
+terminal_labels = [ t.name[1:] for t in Terminal ]
+terminal_labels[Terminal._16] = '<17'
+
+nT = len(Terminal)

@@ -5,10 +5,10 @@
 
 import numpy as np
 
-from ..enums import Action, Hand
+from ..enums import Action, Hand, nH
 
 # Deterministic policy for a dealer who stands on 17.
-stands_on_17 = np.full(len(Hand), Action.HIT)
+stands_on_17 = np.full(nH, Action.HIT)
 
 for _h in range(Hand.H17, Hand.H21 + 1):
     stands_on_17[_h] = Action.STAND

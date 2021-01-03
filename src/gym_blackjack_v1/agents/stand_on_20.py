@@ -5,7 +5,7 @@
 
 import numpy as np
 
-from ..enums import Action, Card, Hand
+from ..enums import Action, Card, Hand, nC, nH
 
 
 class StandOn20Agent:
@@ -13,7 +13,7 @@ class StandOn20Agent:
     A blackjack agent that stands on 20 or higher (Sutton and Barto, 2018).
     """
     def __init__(self, env):
-        self.policy = np.full((len(Hand), len(Card)), Action.HIT)
+        self.policy = np.full((nH, nC), Action.HIT)
         self.policy[Hand.H20:(Hand.H21 + 1), :] = Action.STAND
         self.policy[Hand.S20:(Hand.BJ  + 1), :] = Action.STAND
 

@@ -3,9 +3,9 @@
 #    (See accompanying file LICENSE_1_0.txt or copy at
 #          http://www.boost.org/LICENSE_1_0.txt)
 
-from .action import Action, action_labels
-from .card import Card, card_labels
-from .count import Count, count_labels
-from .hand import Hand, hand_labels
+from .action import Action, action_labels, nA
+from .card import Card, card_labels, nC
+from .hand import Hand, hand_labels, nH
 from .single import Single, single_labels
-from .state import State, state_labels
+from .markov import Markov, markov_labels, nM
+from .terminal import Terminal, terminal_labels, nT

@@ -12,3 +12,5 @@ class Action(IntEnum):
 
 
 action_labels = [ a.name[0] for a in Action ]
+
+nA = len(Action)

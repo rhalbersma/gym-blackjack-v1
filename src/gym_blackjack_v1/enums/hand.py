@@ -39,3 +39,5 @@ class Hand(IntEnum):
 
 
 hand_labels = [ h.name for h in Hand ]
+
+nH = len(Hand)

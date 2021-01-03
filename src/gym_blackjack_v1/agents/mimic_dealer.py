@@ -5,7 +5,7 @@
 
 import numpy as np
 
-from ..enums import Action, Card, Hand
+from ..enums import Action, Card, Hand, nC, nH
 
 
 class MimicDealerAgent:
@@ -13,7 +13,7 @@ class MimicDealerAgent:
     A blackjack agent that mimics the dealer by standing on seventeen or more.
     """
     def __init__(self, env):
-        self.policy = np.full((len(Hand), len(Card)), Action.HIT)
+        self.policy = np.full((nH, nC), Action.HIT)
         self.policy[Hand.H17:(Hand.H21 + 1), :] = Action.STAND
         self.policy[Hand.S17:(Hand.BJ  + 1), :] = Action.STAND
 

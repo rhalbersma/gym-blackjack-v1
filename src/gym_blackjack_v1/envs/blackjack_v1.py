@@ -8,7 +8,7 @@ from gym import spaces
 from gym.utils import seeding
 import numpy as np
 
-from ..enums import Action, Card, Count, Hand, State, card_labels, state_labels
+from ..enums import Action, Card, Hand, Markov, Terminal, card_labels, markov_labels, nA, nC, nH, nT
 from ..utils import dealer, fsm, InfiniteDeck, model
 
 
@@ -49,59 +49,43 @@ class BlackjackEnv(gym.Env):
 
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, winning_blackjack_payout=+1, blackjack_ties_with_21=False, dealer_hits_on_soft_17=False, model_based=False):
+    def __init__(self, winning_blackjack_payoff=+1, blackjack_ties_with_21=False, dealer_hits_on_soft_17=False):
         """
         Initialize the state of the environment.
 
         Args:
-            winning_blackjack_payout (float): how much a winning blackjack pays out. Defaults to +1.
+            winning_blackjack_payoff (float): how much a winning blackjack pays out. Defaults to +1.
             blackjack_ties_with_21 (bool): whether a blackjack (21 on the first two cards) ties with a regular 21. Defaults to False.
             dealer_hits_on_soft_17 (bool): whether the dealer stands or hits on soft 17. Defaults to False.
-            model_based (bool): whether reward and transition probability tensors should be computed. Defaults to False.
 
         Notes:
             The default arguments correspond to Sutton and Barto's example in 'Reinforcement Learning' (2018).
-            blackjack_ties_with_21=True corresponds to the OpenAI Gym environment 'Blackjack-v0'.
-            blackjack_ties_with_21=True with winning_blackjack_payout=1.5 correponds to 'Blackjack-v0' initialized with natural=True.
-            Casinos usually have winning_blackjack_payout=+1.5 (sometimes +1.2), and/or dealer_hits_on_soft_17=True.
-            model_based=True is an extension to the OpenAI Gym interface to enable dynamic programming algorithms.
+            blackjack_ties_with_21=True corresponds to the OpenAI Gym environment gym.make('Blackjack-v0').
+            blackjack_ties_with_21=True with winning_blackjack_payoff=1.5 correponds to gym.make('Blackjack-v0', natural=True).
+            Casinos usually have winning_blackjack_payoff=+1.5 (sometimes +1.2), and/or dealer_hits_on_soft_17=True.
         """
-        self.payout = np.zeros((len(Count), len(Count)))        # The player and dealer have equal scores.
-        self.payout[Count._BUST, :          ]          = -1     # The player busts regardless of whether the dealer busts.
-        self.payout[Count._16:,  Count._BUST]          = +1     # The dealer busts and the player doesn't.
-        self.payout[np.tril_indices(len(Count), k=-1)] = +1     # The player scores higher than the dealer.
-        self.payout[np.triu_indices(len(Count), k=+1)] = -1     # The dealer scores higher than the player.
-        self.payout[Count._BJ,   :Count._BJ ]          = winning_blackjack_payout
+        self.payoff = np.zeros((nT, nT))                    # The player and dealer have equal scores.
+        self.payoff[Terminal._BUST, :             ] = -1    # The player busts regardless of whether the dealer busts.
+        self.payoff[Terminal._16:,  Terminal._BUST] = +1    # The dealer busts and the player doesn't.
+        self.payoff[np.tril_indices(nT, k=-1)     ] = +1    # The player scores higher than the dealer.
+        self.payoff[np.triu_indices(nT, k=+1)     ] = -1    # The dealer scores higher than the player.
+        self.payoff[Terminal._BJ,   :Terminal._BJ ] = winning_blackjack_payoff
         if blackjack_ties_with_21:
-            self.payout[Count._BJ, Count._21]          =  0     # A player's blackjack and a dealer's 21 are treated equally.
-            self.payout[Count._21, Count._BJ]          =  0     # A player's 21 and a dealer's blackjack are treated equally.
+            self.payoff[Terminal._BJ, Terminal._21] =  0    # A player's blackjack and a dealer's 21 are treated equally.
+            self.payoff[Terminal._21, Terminal._BJ] =  0    # A player's 21 and a dealer's blackjack are treated equally.
+        self.reward_range = (np.min(self.payoff), np.max(self.payoff))
         self.dealer_policy = dealer.hits_on_soft_17 if dealer_hits_on_soft_17 else dealer.stands_on_17
-        self.observation_space = spaces.Tuple((
-            spaces.Discrete(len(Hand)),                         # Only include observable Markov states because hidden states have
-            spaces.Discrete(len(Card))                          # a fixed strategy and absorbing states don't need to be explored.
-        ))
-        self.action_space = spaces.Discrete(len(Action))
-        self.reward_range = (np.min(self.payout), np.max(self.payout))
         self.seed()
         self.deck = InfiniteDeck(self.np_random)
-        if model_based:
-            self.nS, self.nA, self.model, self.isd, self.transition, self.reward = model.build(self)
+        self.nS, self.nA, self.P, self.isd, self.transition, self.reward = model.build(self)
+        self.observation_space = spaces.Discrete(self.nS)
+        self.action_space = spaces.Discrete(self.nA)
+        self.observation_shape = (nH, nC)
         self.reset()
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
-
-    def render(self, mode='human'):
-        p = state_labels[self.player]
-        upcard_only = self.dealer in range(Card._2, Card._A + 1)
-        if self.player != State._BUST and upcard_only:
-            d = card_labels[self.dealer]
-            return f'player: {p:>4}; dealer: {d:>4};'
-        else:
-            d = state_labels[fsm.hit[State._DEAL, self.dealer] if upcard_only else self.dealer]
-            R = self.payout[fsm.count[self.player], fsm.count[self.dealer]]
-            return f'player: {p:>4}; dealer: {d:>4}; reward: {R:>+4}'
 
     def _get_obs(self):
         return self.player, self.dealer
@@ -121,36 +105,18 @@ class BlackjackEnv(gym.Env):
             'player': [ card_labels[p1], card_labels[p2] ], 
             'dealer': [ card_labels[up] ] 
         }
-        self.player, self.dealer = fsm.hit[fsm.hit[State._DEAL, p1], p2], up
+        self.player, self.dealer = fsm.hit[fsm.hit[Markov._DEAL, p1], p2], up
         return self._get_obs()
-
-    def step(self, action):
-        if action:
-            card = self.deck.draw()
-            self.info['player'].append(card_labels[card])
-            self.player = fsm.hit[self.player, card]
-            done = self.player == State._BUST
-        else:
-            self.dealer = fsm.hit[State._DEAL, self.dealer]
-            while True:
-                card = self.deck.draw()
-                self.info['dealer'].append(card_labels[card])
-                self.dealer = fsm.hit[self.dealer, card]
-                if self.dealer == State._BUST or not self.dealer_policy[self.dealer]:
-                    break
-            done = True
-        reward = self.payout[fsm.count[self.player], fsm.count[self.dealer]] if done else 0
-        return self._get_obs(), reward, done, self.info
 
     def explore(self, start):
         """
         Explore a specific starting state of the environment.
 
         Args:
-            start (tuple of ints): the player's count and the dealer's upcard.
+            start (tuple of ints): the player's hand and the dealer's upcard.
 
         Returns:
-            observation (object): the player's count and the dealer's upcard.
+            observation (object): the player's hand and the dealer's upcard.
 
         Notes:
             This is an extension of the OpenAI Gym interface.
@@ -162,4 +128,33 @@ class BlackjackEnv(gym.Env):
             'dealer': [] 
         }
         return self._get_obs()
+
+    def step(self, action):
+        if action:
+            card = self.deck.draw()
+            self.info['player'].append(card_labels[card])
+            self.player = fsm.hit[self.player, card]
+            done = self.player == Markov._BUST
+        else:
+            self.dealer = fsm.hit[Markov._DEAL, self.dealer]
+            while True:
+                card = self.deck.draw()
+                self.info['dealer'].append(card_labels[card])
+                self.dealer = fsm.hit[self.dealer, card]
+                if self.dealer == Markov._BUST or not self.dealer_policy[self.dealer]:
+                    break
+            done = True
+        reward = self.payoff[fsm.count[self.player], fsm.count[self.dealer]] if done else 0
+        return self._get_obs(), reward, done, self.info
+
+    def render(self, mode='human'):
+        p = markov_labels[self.player]
+        upcard_only = self.dealer in range(Card._2, Card._A + 1)
+        if self.player != Markov._BUST and upcard_only:
+            d = card_labels[self.dealer]
+            return f'player: {p:>4}; dealer: {d:>4};'
+        else:
+            d = markov_labels[fsm.hit[Markov._DEAL, self.dealer] if upcard_only else self.dealer]
+            R = self.payoff[fsm.count[self.player], fsm.count[self.dealer]]
+            return f'player: {p:>4}; dealer: {d:>4}; reward: {R:>+4}'
 

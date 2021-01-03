@@ -5,7 +5,7 @@
 
 import numpy as np
 
-from ..enums import Action, Card, Hand
+from ..enums import Action, Card, Hand, nC, nH
 
 
 class BasicStrategyAgent:
@@ -13,7 +13,7 @@ class BasicStrategyAgent:
     A blackjack agent that plays according to the Basic Strategy (Thorp, 1966).
     """
     def __init__(self, env):
-        self.policy = np.full((len(Hand), len(Card)), Action.HIT)
+        self.policy = np.full((nH, nC), Action.HIT)
         self.policy[Hand.H13:(Hand.H21 + 1), Card._2:(Card._3 + 1)] = Action.STAND
         self.policy[Hand.H12:(Hand.H21 + 1), Card._4:(Card._6 + 1)] = Action.STAND
         self.policy[Hand.H17:(Hand.H21 + 1), Card._7:(Card._A + 1)] = Action.STAND

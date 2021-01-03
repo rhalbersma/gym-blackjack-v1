@@ -5,5 +5,5 @@
 
 from . import envs
 from .agents import AlwaysHitAgent, AlwaysStandAgent, BasicStrategyAgent, MimicDealerAgent, RandomPlayAgent, StandOn20Agent
-from .enums import Action, Card, Count, Hand, action_labels, card_labels, count_labels, hand_labels
+from .enums import Action, Card, Hand, Terminal, action_labels, card_labels, hand_labels, terminal_labels
 from .utils import play, simulate

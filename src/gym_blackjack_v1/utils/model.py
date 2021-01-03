@@ -5,7 +5,7 @@
 
 import numpy as np
 
-from ..enums import Action, Card, Count, Hand, State
+from ..enums import Action, Card, Hand, Markov, Terminal, nA, nC, nH, nM, nT
 from ..utils import fsm
 
 ################################################################################
@@ -23,28 +23,28 @@ from ..utils import fsm
 ################################################################################
 
 
-def state_transitions(fsm, prob):
-    p = np.zeros((len(State), len(State)))
-    for s0, successors in enumerate(fsm):
-        for card, s1 in enumerate(successors):
-            p[s0, s1] += prob[card]
+def markov_state_transitions(fsm, prob):
+    p = np.zeros((nM, nM))
+    for m0, successors in enumerate(fsm):
+        for card, m1 in enumerate(successors):
+            p[m0, m1] += prob[card]
     assert np.isclose(p.sum(axis=-1), 1).all()
     return p
 
 
-def state_action_transitions(fsm_array, prob):
-    p = np.zeros((len(State), len(Action), len(State)))
+def markov_state_action_transitions(fsm_array, prob):
+    p = np.zeros((nM, nA, nM))
     for a in Action:
-        p[:, a, :] = state_transitions(fsm_array[a], prob)
+        p[:, a, :] = markov_state_transitions(fsm_array[a], prob)
     assert np.isclose(p.sum(axis=-1), 1).all()
     return p
 
 
-def upcard_transitions():
-    p = np.zeros((len(Card), len(State) - len(Count)))
-    for uc in Card:
-        h = fsm.hit[State._DEAL, uc]
-        p[uc, h] = 1
+def card_transitions():
+    p = np.zeros((nC, nM - nT))
+    for c in Card:
+        h = fsm.hit[Markov._DEAL, c]
+        p[c, h] = 1
     assert np.isclose(p.sum(axis=-1), 1).all()
     return p
 
@@ -59,16 +59,16 @@ def fsm_policy(fsm_array, one_hot_policy):
     return (fsm_array * np.expand_dims(one_hot_policy, axis=0).T).sum(axis=0)
 
 
-def hand_counts(fsm, prob):
+def absorbing_prob(fsm, prob):
     # Construct an absorbing Markov chain from the FSM and the card probabilities
     # https://en.wikipedia.org/wiki/Absorbing_Markov_chain
-    P = state_transitions(fsm, prob)
-    Q = P[:-len(Count), :-len(Count)]
-    R = P[:-len(Count), -len(Count):]
+    P = markov_state_transitions(fsm, prob)
+    Q = P[:-nT, :-nT]
+    R = P[:-nT, -nT:]
 
     # Compute the absorbing probabilities
     # https://en.wikipedia.org/wiki/Absorbing_Markov_chain#Absorbing_probabilities
-    I = np.identity(len(State) - len(Count))
+    I = np.identity(nM - nT)
     N = np.linalg.inv(I - Q)
     B = N @ R
     assert np.isclose(B.sum(axis=-1), 1).all()
@@ -76,37 +76,38 @@ def hand_counts(fsm, prob):
 
 
 def build(env):
-    nS = len(Hand) * len(Card)
-    nA = len(Action)
+    nS = nH * nC
+    done = -1
 
     # Compute the initial state distribution.
     card_prob = env.deck.prob
-    prob_s_a_s = state_action_transitions(fsm.stand_hit, card_prob)
-    hand_prob = np.linalg.matrix_power(prob_s_a_s[:, Action.HIT, :], 2)[State._DEAL, :len(Hand)]
-    isd = (hand_prob.reshape(-1, 1) * card_prob.reshape(1, -1)).reshape(len(Hand) * len(Card))
+    prob_m_a_m = markov_state_action_transitions(fsm.stand_hit, card_prob)
+    hand_prob = np.linalg.matrix_power(prob_m_a_m[:, Action.HIT, :], 2)[Markov._DEAL, :nH]
+    isd = (hand_prob.reshape(-1, 1) * card_prob.reshape(1, -1)).reshape(nS)
     assert np.isclose(isd.sum(), 1)
 
-    dealer_one_hot = one_hot_encode(np.resize(env.dealer_policy, len(State)))
+    dealer_one_hot = one_hot_encode(np.resize(env.dealer_policy, nM))
     dealer_fsm = fsm_policy(fsm.stand_hit, dealer_one_hot)
-    dealer_counts = upcard_transitions() @ hand_counts(dealer_fsm, card_prob)
+    dealer_terminal = card_transitions() @ absorbing_prob(dealer_fsm, card_prob)
 
-    Reward = np.unique(env.payout)
+    Reward = np.unique(env.payoff)
+    nR = len(Reward)
     no_reward = np.where(Reward == 0)[0][0]
 
-    prob_h_c_a_r_h_c = np.zeros((len(Hand), len(Card), len(Action), len(Reward), len(Hand), len(Card)))
-    for uc in Card:
-        prob_h_c_a_r_h_c[:, uc, Action.HIT, no_reward, :, uc] = prob_s_a_s[:len(Hand), Action.HIT, :len(Hand)]
+    prob_h_c_a_r_h_c = np.zeros((nH, nC, nA, nR, nH, nC))
+    for c in Card:
+        prob_h_c_a_r_h_c[:, c, Action.HIT, no_reward, :, c] = prob_m_a_m[:nH, Action.HIT, :nH]
 
-    prob_h_c_a_r = np.zeros((len(Hand), len(Card), len(Action), len(Reward)))
-    for uc in Card:
-        for i, r in enumerate(Reward):
-            prob_h_c_a_r[:, uc, :, i] = prob_s_a_s[:len(Hand), :, -len(Count):] @ (env.payout == r) @ dealer_counts[uc].T
+    prob_h_c_a_r = np.zeros((nH, nC, nA, nR))
+    for c in Card:
+        for ri, r in enumerate(Reward):
+            prob_h_c_a_r[:, c, :, ri] = prob_m_a_m[:nH, :, -nT:] @ (env.payoff == r) @ dealer_terminal[c].T
 
     # p(s', r|s, a): probability of transition to state s' with reward r, from state s and action a
-    model = np.zeros((len(Hand) * len(Card) + 1, len(Action), len(Reward), len(Hand) * len(Card) + 1))
-    model[:-1, Action.HIT, no_reward, :-1] = prob_h_c_a_r_h_c[:, :, Action.HIT, no_reward, :, :].reshape((len(Hand) * len(Card), len(Hand) * len(Card)))
-    model[:-1, :,          :,          -1] = prob_h_c_a_r.reshape((len(Hand) * len(Card), len(Action), len(Reward)))
-    model[ -1, :,          no_reward,  -1] = 1
+    model = np.zeros((nS + 1, nA, nR, nS + 1))
+    model[:done, Action.HIT, no_reward, :done] = prob_h_c_a_r_h_c[:, :, Action.HIT, no_reward, :, :].reshape((nS, nS))
+    model[:done, :,          :,          done] = prob_h_c_a_r.reshape((nS, nA, nR))
+    model[ done, :,          no_reward,  done] = 1
     assert np.isclose(model.sum(axis=(2, 3)), 1).all()
 
     # p(s'|s, a): probability of transition to state s', from state s taking action a
@@ -116,5 +117,21 @@ def build(env):
     # r(s, a): expected immediate reward from state s after action a
     reward = model.sum(axis=3) @ Reward
 
-    return nS, nA, model, isd, transition, reward
+    # OpenAI's Gym DiscreteEnv expects a dictionary of lists, where
+    # P[s][a] == [(probability, nextstate, reward, done), ...]
+    # In other words: P is a sparse representation of our dense tensor model[s, a, reward, nextstate]
+    P = {
+        s: {
+            a: [
+                (model[s, a, ri, next], next, r, next == done)
+                for ri, r in enumerate(Reward)
+                for next in range(done, nS)
+                if model[s, a, ri, next] > 0
+            ]
+            for a in range(nA)
+        }
+        for s in range(nS)
+    }
+
+    return nS, nA, P, isd, transition, reward
 
