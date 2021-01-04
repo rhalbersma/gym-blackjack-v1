@@ -87,61 +87,66 @@ def absorbing_prob(fsm, prob):
 
 def build(env):
     nS = nH * nC
-    done = -1
+    nSp = nS + 1
+    done = nS
 
     # Compute the initial state distribution.
     card_prob = inifinite_deck()
     prob_m_a_m = markov_state_action_transitions(fsm.stand_hit, card_prob)
     hand_prob = np.linalg.matrix_power(prob_m_a_m[:, Action.HIT, :], 2)[Markov._DEAL, :nH]
-    isd = (hand_prob.reshape(-1, 1) * card_prob.reshape(1, -1)).reshape(nS)
-    assert np.isclose(isd.sum(), 1)
-    is_cdf = isd.cumsum()
+    start_pdf = (hand_prob.reshape(-1, 1) * card_prob.reshape(1, -1)).reshape(nS)
+    assert np.isclose(start_pdf.sum(), 1)
+    start_cdf = start_pdf.cumsum()
 
+    # Compute the terminal state distributions.
+    # For the dealer, it's a vector of his upcard.
+    # For the player, it's a matrix of his hand and action.
     dealer_one_hot = one_hot_encode(np.resize(env.dealer_policy, nM))
     dealer_fsm = fsm_policy(fsm.stand_hit, dealer_one_hot)
     dealer_terminal = card_transitions() @ absorbing_prob(dealer_fsm, card_prob)
+    player_terminal = prob_m_a_m[:nH, :, -nT:]
 
     Reward = np.unique(env.payoff)
     nR = len(Reward)
     no_reward = np.where(Reward == 0)[0][0]
 
-    prob_h_c_a_r_h_c = np.zeros((nH, nC, nA, nR, nH, nC))
+    prob_h_c_a_h_c_r = np.zeros((nH, nC, nA, nH, nC, nR))
     for c in Card:
-        prob_h_c_a_r_h_c[:, c, Action.HIT, no_reward, :, c] = prob_m_a_m[:nH, Action.HIT, :nH]
+        prob_h_c_a_h_c_r[:, c, Action.HIT, :, c, no_reward] = prob_m_a_m[:nH, Action.HIT, :nH]
 
     prob_h_c_a_r = np.zeros((nH, nC, nA, nR))
     for c in Card:
         for ri, r in enumerate(Reward):
-            prob_h_c_a_r[:, c, :, ri] = prob_m_a_m[:nH, :, -nT:] @ (env.payoff == r) @ dealer_terminal[c].T
+            prob_h_c_a_r[:, c, :, ri] = player_terminal @ (env.payoff == r) @ dealer_terminal[c].T
 
     # p(s', r|s, a): probability of transition to state s' with reward r, from state s and action a
-    model = np.zeros((nS + 1, nA, nR, nS + 1))
-    model[:done, Action.HIT, no_reward, :done] = prob_h_c_a_r_h_c[:, :, Action.HIT, no_reward, :, :].reshape((nS, nS))
-    model[:done, :,          :,          done] = prob_h_c_a_r.reshape((nS, nA, nR))
-    model[ done, :,          no_reward,  done] = 1
-    assert np.isclose(model.sum(axis=(2, 3)), 1).all()
+    P_tensor = np.zeros((nSp, nA, nSp, nR))
+    P_tensor[:done, Action.HIT, :done, no_reward] = prob_h_c_a_h_c_r[:, :, Action.HIT, :, :, no_reward].reshape((nS, nS))
+    P_tensor[:done, :,           done, :        ] = prob_h_c_a_r.reshape((nS, nA, nR))
+    P_tensor[ done, :,           done, no_reward] = 1
+    assert np.isclose(P_tensor.sum(axis=(2, 3)), 1).all()
 
     # p(s'|s, a): probability of transition to state s', from state s taking action a
-    transition = model.sum(axis=2)
+    transition = P_tensor.sum(axis=3)
     assert np.isclose(transition.sum(axis=2), 1).all()
 
     # r(s, a): expected immediate reward from state s after action a
-    reward = model.sum(axis=3) @ Reward
+    reward = P_tensor.sum(axis=2) @ Reward
 
     # OpenAI's Gym DiscreteEnv expects a dictionary of lists, where
     # P[s][a] == [(probability, nextstate, reward, done), ...]
-    # In other words: P is a sparse representation of our dense tensor model[s, a, reward, nextstate]
+    # In other words: P is a sparse representation of P_tensor[s, a, reward, nextstate]
     P = {
         s: {
             a: [
-                (model[s, a, ri, next], next, r, next == done)
-                for ri, r in enumerate(Reward)
-                for next in range(done, nS)
-                if model[s, a, ri, next] > 0
+                (P_tensor[s, a, next, r], next, Reward[r], next == done)
+                for next in range(nSp)
+                for r in range(nR)
+                if P_tensor[s, a, next, r] > 0
             ]
             for a in range(nA)
         }
-        for s in range(nS)
+        for s in range(nSp)
     }
 
     next_reward_cdf = {
@@ -152,8 +157,8 @@ def build(env):
             ]).cumsum()
             for a in range(nA)
         }
-        for s in range(nS)
+        for s in range(nSp)
     }
 
-    return nS, nA, P, isd, next_reward_cdf, is_cdf, transition, reward
+    return nS, nSp, nA, P, next_reward_cdf, start_pdf, start_cdf, transition, reward
 

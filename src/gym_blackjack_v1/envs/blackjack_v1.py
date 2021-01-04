@@ -76,7 +76,7 @@ class BlackjackEnv(gym.Env):
         self.reward_range = (np.min(self.payoff), np.max(self.payoff))
         self.dealer_policy = dealer.hits_on_soft_17 if dealer_hits_on_soft_17 else dealer.stands_on_17
         self.observation_shape = (nH, nC)
-        self.nS, self.nA, self.P, self.isd, self.next_reward_cdf, self.is_cdf, self.transition, self.reward = model.build(self)
+        self.nS, self.nSp, self.nA, self.P, self.next_reward_cdf, self.start_pdf, self.start_cdf, self.transition, self.reward = model.build(self)
         self.observation_space = spaces.Discrete(self.nS)
         self.action_space = spaces.Discrete(self.nA)
         self.seed()
@@ -86,7 +86,7 @@ class BlackjackEnv(gym.Env):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
 
-    def _sample_from_cumulative_categorical(self, cdf):
+    def _sample_from_categorical_cdf(self, cdf):
         """
         Sample from a cumulative categorical distribution.
         """
@@ -94,14 +94,14 @@ class BlackjackEnv(gym.Env):
 
     def step(self, a):
         next_reward_cdf = self.next_reward_cdf[self.s][a]
-        next_reward_idx = self._sample_from_cumulative_categorical(next_reward_cdf)
+        next_reward_idx = self._sample_from_categorical_cdf(next_reward_cdf)
         prob, next, reward, done = self.P[self.s][a][next_reward_idx]
         self.s = next
         self.lastaction = a
         return next, reward, done, { 'prob': prob }
 
     def reset(self):
-        self.s = self._sample_from_cumulative_categorical(self.is_cdf)
+        self.s = self._sample_from_categorical_cdf(self.start_cdf)
         self.lastaction = None
         return self.s
 
