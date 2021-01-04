@@ -5,6 +5,7 @@
 
 import gym
 from gym import spaces
+from gym.envs.toy_text import discrete
 from gym.utils import seeding
 import numpy as np
 
@@ -12,7 +13,7 @@ from ..enums import Action, Card, Hand, Markov, Terminal, card_labels, markov_la
 from ..utils import dealer, fsm, model
 
 
-class BlackjackEnv(gym.Env):
+class BlackjackEnv(discrete.DiscreteEnv):
     """
     Blackjack environment corresponding to Examples 5.1, 5.3 and 5.4 in
     Reinforcement Learning: An Introduction (2nd ed.) by Sutton and Barto.
@@ -76,21 +77,11 @@ class BlackjackEnv(gym.Env):
         self.reward_range = (np.min(self.payoff), np.max(self.payoff))
         self.dealer_policy = dealer.hits_on_soft_17 if dealer_hits_on_soft_17 else dealer.stands_on_17
         self.observation_shape = (nH, nC)
-        self.nS, self.nSp, self.nA, self.P, self.next_reward_cdf, self.start_pdf, self.start_cdf, self.transition, self.reward = model.build(self)
-        self.observation_space = spaces.Discrete(self.nS)
-        self.action_space = spaces.Discrete(self.nA)
-        self.seed()
-        self.reset()
-
-    def seed(self, seed=None):
-        self.np_random, seed = seeding.np_random(seed)
-        return [seed]
+        self.nHC, nS, nA, P, start_pdf, self.start_cdf, self.next_reward_cdf, self.transition, self.reward = model.build(self)
+        super(BlackjackEnv, self).__init__(nS, nA, P, start_pdf)
 
     def _sample_from_categorical_cdf(self, cdf):
-        """
-        Sample from a cumulative categorical distribution.
-        """
-        return (cdf > self.np_random.rand()).argmax()
+        return int((cdf > self.np_random.rand()).argmax())
 
     def step(self, a):
         next_reward_cdf = self.next_reward_cdf[self.s][a]

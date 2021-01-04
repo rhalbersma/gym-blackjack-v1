@@ -86,21 +86,21 @@ def absorbing_prob(fsm, prob):
 
 
 def build(env):
-    nS = nH * nC
-    nSp = nS + 1
-    done = nS
+    nHC = nH * nC    # number of non-terminal states: |S|
+    nS = nHC + 1     # number of all states, including the terminal state: |S+|
+    terminal = nHC
 
     # Compute the initial state distribution.
     card_prob = inifinite_deck()
     prob_m_a_m = markov_state_action_transitions(fsm.stand_hit, card_prob)
     hand_prob = np.linalg.matrix_power(prob_m_a_m[:, Action.HIT, :], 2)[Markov._DEAL, :nH]
-    start_pdf = (hand_prob.reshape(-1, 1) * card_prob.reshape(1, -1)).reshape(nS)
+    start_pdf = np.append((hand_prob.reshape(-1, 1) * card_prob.reshape(1, -1)).reshape(nHC), np.zeros(1))
     assert np.isclose(start_pdf.sum(), 1)
     start_cdf = start_pdf.cumsum()
 
     # Compute the terminal state distributions.
-    # For the dealer, it's a vector of his upcard.
-    # For the player, it's a matrix of his hand and action.
+    # For the dealer, it's conditional on his upcard.
+    # For the player, it's conditional on his hand and action.
     dealer_one_hot = one_hot_encode(np.resize(env.dealer_policy, nM))
     dealer_fsm = fsm_policy(fsm.stand_hit, dealer_one_hot)
     dealer_terminal = card_transitions() @ absorbing_prob(dealer_fsm, card_prob)
@@ -111,19 +111,19 @@ def build(env):
     no_reward = np.where(Reward == 0)[0][0]
 
     prob_h_c_a_h_c_r = np.zeros((nH, nC, nA, nH, nC, nR))
-    for c in Card:
+    for c in range(nC):
         prob_h_c_a_h_c_r[:, c, Action.HIT, :, c, no_reward] = prob_m_a_m[:nH, Action.HIT, :nH]
 
     prob_h_c_a_r = np.zeros((nH, nC, nA, nR))
-    for c in Card:
-        for ri, r in enumerate(Reward):
-            prob_h_c_a_r[:, c, :, ri] = player_terminal @ (env.payoff == r) @ dealer_terminal[c].T
+    for c in range(nC):
+        for r in range(nR):
+            prob_h_c_a_r[:, c, :, r] = player_terminal @ (env.payoff == Reward[r]) @ dealer_terminal[c].T
 
     # p(s', r|s, a): probability of transition to state s' with reward r, from state s and action a
-    P_tensor = np.zeros((nSp, nA, nSp, nR))
-    P_tensor[:done, Action.HIT, :done, no_reward] = prob_h_c_a_h_c_r[:, :, Action.HIT, :, :, no_reward].reshape((nS, nS))
-    P_tensor[:done, :,           done, :        ] = prob_h_c_a_r.reshape((nS, nA, nR))
-    P_tensor[ done, :,           done, no_reward] = 1
+    P_tensor = np.zeros((nS, nA, nS, nR))
+    P_tensor[:terminal, Action.HIT, :terminal, no_reward] = prob_h_c_a_h_c_r[:, :, Action.HIT, :, :, no_reward].reshape((nHC, nHC))
+    P_tensor[:terminal, :,           terminal, :        ] = prob_h_c_a_r.reshape((nHC, nA, nR))
+    P_tensor[ terminal, :,           terminal, no_reward] = 1
     assert np.isclose(P_tensor.sum(axis=(2, 3)), 1).all()
 
     # p(s'|s, a): probability of transition to state s', from state s taking action a
@@ -134,19 +134,19 @@ def build(env):
     reward = P_tensor.sum(axis=2) @ Reward
 
     # OpenAI's Gym DiscreteEnv expects a dictionary of lists, where
-    # P[s][a] == [(probability, nextstate, reward, done), ...]
-    # In other words: P is a sparse representation of P_tensor[s, a, reward, nextstate]
+    # P[s][a] == [(prob, next, reward, done), ...]
+    # In other words: P is a sparse representation of P_tensor[s, a, next, reward]
     P = {
         s: {
             a: [
-                (P_tensor[s, a, next, r], next, Reward[r], next == done)
-                for next in range(nSp)
+                (P_tensor[s, a, next, r], next, Reward[r], next == terminal)
+                for next in range(nS)
                 for r in range(nR)
                 if P_tensor[s, a, next, r] > 0
             ]
             for a in range(nA)
         }
-        for s in range(nSp)
+        for s in range(nS)
     }
 
     next_reward_cdf = {
@@ -157,8 +157,8 @@ def build(env):
             ]).cumsum()
             for a in range(nA)
         }
-        for s in range(nSp)
+        for s in range(nS)
     }
 
-    return nS, nSp, nA, P, next_reward_cdf, start_pdf, start_cdf, transition, reward
+    return nHC, nS, nA, P, start_pdf, start_cdf, next_reward_cdf, transition, reward
 
