@@ -70,13 +70,13 @@ def fsm_policy(fsm_array, one_hot_policy):
 
 
 def absorbing_prob(fsm, prob):
-    # Construct an absorbing Markov chain from the FSM and the card probabilities
+    # Construct an absorbing Markov chain from the FSM and the card probabilities.
     # https://en.wikipedia.org/wiki/Absorbing_Markov_chain
     P = markov_state_transitions(fsm, prob)
     Q = P[:-nT, :-nT]
     R = P[:-nT, -nT:]
 
-    # Compute the absorbing probabilities
+    # Compute the absorbing probabilities.
     # https://en.wikipedia.org/wiki/Absorbing_Markov_chain#Absorbing_probabilities
     I = np.identity(nM - nT)
     N = np.linalg.inv(I - Q)
@@ -86,15 +86,15 @@ def absorbing_prob(fsm, prob):
 
 
 def build(env):
-    nS  = nH * nC   # number of non-terminal states: |S|
-    nSp = nS + 1    # number of all states, including the terminal state: |S+|
+    nS  = nH * nC   # The number of non-terminal states: |S|.
+    nSp = nS + 1    # The number of all states, including the terminal state: |S+|.
     terminal = nS
 
     # Compute the initial state distribution.
     card_prob = inifinite_deck()
     prob_m_a_m = markov_state_action_transitions(fsm.stand_hit, card_prob)
     hand_prob = np.linalg.matrix_power(prob_m_a_m[:, Action.HIT, :], 2)[Markov._DEAL, :nH]
-    start_pdf = np.append((hand_prob.reshape(-1, 1) * card_prob.reshape(1, -1)).reshape(nS), np.zeros(1))
+    start_pdf = (hand_prob.reshape(-1, 1) * card_prob.reshape(1, -1)).reshape(nS)
     assert np.isclose(start_pdf.sum(), 1)
     start_cdf = start_pdf.cumsum()
 
@@ -119,23 +119,26 @@ def build(env):
         for r in range(nR):
             prob_h_c_a_r[:, c, :, r] = player_terminal @ (env.payoff == Reward[r]) @ dealer_terminal[c].T
 
-    # p(s', r|s, a): probability of transition to state s' with reward r, from state s and action a
+    # Equation (3.2) in Sutton & Barto (p.48):
+    # p(s', r|s, a) = probability of transition to state s' with reward r, from state s and action a.
     P_tensor = np.zeros((nSp, nA, nSp, nR))
     P_tensor[:terminal, Action.HIT, :terminal, no_reward] = prob_h_c_a_h_c_r[:, :, Action.HIT, :, :, no_reward].reshape((nS, nS))
     P_tensor[:terminal, :,           terminal, :        ] = prob_h_c_a_r.reshape((nS, nA, nR))
     P_tensor[ terminal, :,           terminal, no_reward] = 1
+    # Equation (3.3) in Sutton & Barto (p.48).
     assert np.isclose(P_tensor.sum(axis=(2, 3)), 1).all()
 
-    # p(s'|s, a): probability of transition to state s', from state s taking action a
+    # Equation (3.4) in Sutton & Barto (p.49):
+    # p(s'|s, a) = probability of transition to state s', from state s taking action a.
     transition = P_tensor.sum(axis=3)
-    assert np.isclose(transition.sum(axis=2), 1).all()
 
-    # r(s, a): expected immediate reward from state s after action a
+    # Equation (3.5) in Sutton & Barto (p.49):
+    # r(s, a) = expected immediate reward from state s after action a.
     reward = P_tensor.sum(axis=2) @ Reward
 
     # OpenAI's Gym DiscreteEnv expects a dictionary of lists, where
     # P[s][a] == [(prob, next, reward, done), ...]
-    # In other words: P is a sparse representation of P_tensor[s, a, next, reward]
+    # In other words: P is a sparse representation of P_tensor[s, a, next, reward].
     P = {
         s: {
             a: [
