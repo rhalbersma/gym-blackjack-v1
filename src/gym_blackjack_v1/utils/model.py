@@ -86,15 +86,15 @@ def absorbing_prob(fsm, prob):
 
 
 def build(env):
-    nHC = nH * nC    # number of non-terminal states: |S|
-    nS = nHC + 1     # number of all states, including the terminal state: |S+|
-    terminal = nHC
+    nS  = nH * nC   # number of non-terminal states: |S|
+    nSp = nS + 1    # number of all states, including the terminal state: |S+|
+    terminal = nS
 
     # Compute the initial state distribution.
     card_prob = inifinite_deck()
     prob_m_a_m = markov_state_action_transitions(fsm.stand_hit, card_prob)
     hand_prob = np.linalg.matrix_power(prob_m_a_m[:, Action.HIT, :], 2)[Markov._DEAL, :nH]
-    start_pdf = np.append((hand_prob.reshape(-1, 1) * card_prob.reshape(1, -1)).reshape(nHC), np.zeros(1))
+    start_pdf = np.append((hand_prob.reshape(-1, 1) * card_prob.reshape(1, -1)).reshape(nS), np.zeros(1))
     assert np.isclose(start_pdf.sum(), 1)
     start_cdf = start_pdf.cumsum()
 
@@ -120,9 +120,9 @@ def build(env):
             prob_h_c_a_r[:, c, :, r] = player_terminal @ (env.payoff == Reward[r]) @ dealer_terminal[c].T
 
     # p(s', r|s, a): probability of transition to state s' with reward r, from state s and action a
-    P_tensor = np.zeros((nS, nA, nS, nR))
-    P_tensor[:terminal, Action.HIT, :terminal, no_reward] = prob_h_c_a_h_c_r[:, :, Action.HIT, :, :, no_reward].reshape((nHC, nHC))
-    P_tensor[:terminal, :,           terminal, :        ] = prob_h_c_a_r.reshape((nHC, nA, nR))
+    P_tensor = np.zeros((nSp, nA, nSp, nR))
+    P_tensor[:terminal, Action.HIT, :terminal, no_reward] = prob_h_c_a_h_c_r[:, :, Action.HIT, :, :, no_reward].reshape((nS, nS))
+    P_tensor[:terminal, :,           terminal, :        ] = prob_h_c_a_r.reshape((nS, nA, nR))
     P_tensor[ terminal, :,           terminal, no_reward] = 1
     assert np.isclose(P_tensor.sum(axis=(2, 3)), 1).all()
 
@@ -140,7 +140,7 @@ def build(env):
         s: {
             a: [
                 (P_tensor[s, a, next, r], next, Reward[r], next == terminal)
-                for next in range(nS)
+                for next in range(nSp)
                 for r in range(nR)
                 if P_tensor[s, a, next, r] > 0
             ]
@@ -160,5 +160,5 @@ def build(env):
         for s in range(nS)
     }
 
-    return nHC, nS, nA, P, start_pdf, start_cdf, next_reward_cdf, transition, reward
+    return nSp, nS, nA, P, start_pdf, start_cdf, next_reward_cdf, transition, reward
 

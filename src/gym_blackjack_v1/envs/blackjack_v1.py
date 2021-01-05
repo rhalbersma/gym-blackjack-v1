@@ -77,7 +77,7 @@ class BlackjackEnv(discrete.DiscreteEnv):
         self.reward_range = (np.min(self.payoff), np.max(self.payoff))
         self.dealer_policy = dealer.hits_on_soft_17 if dealer_hits_on_soft_17 else dealer.stands_on_17
         self.observation_shape = (nH, nC)
-        self.nHC, nS, nA, P, start_pdf, self.start_cdf, self.next_reward_cdf, self.transition, self.reward = model.build(self)
+        self.nSp, nS, nA, P, start_pdf, self.start_cdf, self.next_reward_cdf, self.transition, self.reward = model.build(self)
         super(BlackjackEnv, self).__init__(nS, nA, P, start_pdf)
 
     def _sample_from_categorical_cdf(self, cdf):
