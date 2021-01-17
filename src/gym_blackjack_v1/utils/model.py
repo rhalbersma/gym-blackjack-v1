@@ -87,16 +87,14 @@ def absorbing_prob(fsm, prob):
 
 def build(env):
     nS  = nH * nC   # The number of non-terminal states: |S|.
-    nSp = nS + 1    # The number of all states, including the terminal state: |S+|.
-    terminal = nS
 
     # Compute the initial state distribution.
     card_prob = inifinite_deck()
     prob_m_a_m = markov_state_action_transitions(fsm.stand_hit, card_prob)
     hand_prob = np.linalg.matrix_power(prob_m_a_m[:, Action.HIT, :], 2)[Markov._DEAL, :nH]
-    start_pdf = (hand_prob.reshape(-1, 1) * card_prob.reshape(1, -1)).reshape(nS)
-    assert np.isclose(start_pdf.sum(), 1)
-    start_cdf = start_pdf.cumsum()
+    reset_pdf = (hand_prob.reshape(-1, 1) * card_prob.reshape(1, -1)).reshape(nS)
+    assert np.isclose(reset_pdf.sum(), 1)
+    reset_cdf = reset_pdf.cumsum()
 
     # Compute the terminal state distributions.
     # For the dealer, it's conditional on his upcard.
@@ -106,62 +104,70 @@ def build(env):
     dealer_terminal = card_transitions() @ absorbing_prob(dealer_fsm, card_prob)
     player_terminal = prob_m_a_m[:nH, :, -nT:]
 
-    Reward = np.unique(env.payoff)
-    nR = len(Reward)
-    no_reward = np.where(Reward == 0)[0][0]
+    unique_rewards = np.unique(env.payoff)
+    nR = len(unique_rewards)
+    no_reward = np.where(unique_rewards == 0)[0][0]
 
     prob_h_c_a_h_c_r = np.zeros((nH, nC, nA, nH, nC, nR))
     for c in range(nC):
         prob_h_c_a_h_c_r[:, c, Action.HIT, :, c, no_reward] = prob_m_a_m[:nH, Action.HIT, :nH]
+    prob_sHs0 = prob_h_c_a_h_c_r[:, :, Action.HIT, :, :, no_reward].reshape((nS, nS))
 
     prob_h_c_a_r = np.zeros((nH, nC, nA, nR))
-    for c in range(nC):
-        for r in range(nR):
-            prob_h_c_a_r[:, c, :, r] = player_terminal @ (env.payoff == Reward[r]) @ dealer_terminal[c].T
-
-    # Equation (3.2) in Sutton & Barto (p.48):
-    # p(s', r|s, a) = probability of transition to state s' with reward r, from state s and action a.
-    P_tensor = np.zeros((nSp, nA, nSp, nR))
-    P_tensor[:terminal, Action.HIT, :terminal, no_reward] = prob_h_c_a_h_c_r[:, :, Action.HIT, :, :, no_reward].reshape((nS, nS))
-    P_tensor[:terminal, :,           terminal, :        ] = prob_h_c_a_r.reshape((nS, nA, nR))
-    P_tensor[ terminal, :,           terminal, no_reward] = 1
-    # Equation (3.3) in Sutton & Barto (p.48).
-    assert np.isclose(P_tensor.sum(axis=(2, 3)), 1).all()
-
-    # Equation (3.4) in Sutton & Barto (p.49):
-    # p(s'|s, a) = probability of transition to state s', from state s taking action a.
-    transition = P_tensor.sum(axis=3)
-
-    # Equation (3.5) in Sutton & Barto (p.49):
-    # r(s, a) = expected immediate reward from state s after action a.
-    reward = P_tensor.sum(axis=2) @ Reward
+    for c, r in product(range(nC), range(nR)):
+        prob_h_c_a_r[:, c, :, r] = player_terminal @ (env.payoff == unique_rewards[r]) @ dealer_terminal[c].T
+    prob_saTr = prob_h_c_a_r.reshape((nS, nA, nR))
 
     # OpenAI's Gym DiscreteEnv expects a dictionary of lists, where
     # P[s][a] == [(prob, next, reward, done), ...]
-    # In other words: P is a sparse representation of P_tensor[s, a, next, reward].
-    P = {
+    # In other words: P is a sparse representation of Sutton & Barto's dense 4-tensor p(s', r|s, a).
+    P = { 
         s: {
-            a: [
-                (P_tensor[s, a, next, r], next, Reward[r], next == terminal)
-                for next in range(nSp)
+            Action.HIT: [
+                (prob_sHs0[s, next], next, unique_rewards[no_reward], False)
+                for next in range(nS)
+                if prob_sHs0[s, next] > 0
+            ] + [
+                (prob_saTr[s, Action.HIT, r], -1, unique_rewards[r], True)
                 for r in range(nR)
-                if P_tensor[s, a, next, r] > 0
+                if prob_saTr[s, Action.HIT, r] > 0
+            ],
+            Action.STAND: [
+                (prob_saTr[s, Action.STAND, r], -1, unique_rewards[r], True)
+                for r in range(nR)
+                if prob_saTr[s, Action.STAND, r] > 0
             ]
-            for a in range(nA)
         }
         for s in range(nS)
     }
 
-    next_reward_cdf = {
+    # Equation (3.4) in Sutton & Barto (p.49):
+    # p(s'|s, a) = probability of transition to state s', from state s taking action a.
+    transition = np.zeros((nS, nA, nS))
+
+    # Equation (3.5) in Sutton & Barto (p.49):
+    # r(s, a) = expected immediate reward from state s after action a.
+    reward = np.zeros((nS, nA))
+
+    # Initialize the transition and reward tensors.
+    for s in P.keys():
+        for a in P[s].keys():
+            for prob, next, r, done in P[s][a]:
+                # Exclude transitions to the terminal state.
+                if not done:
+                    transition[s, a, next] += prob
+                reward[s, a] += prob * r
+
+    step_cdf = {
         s: {
             a: np.array([
                 t[0]
                 for t in P[s][a]
             ]).cumsum()
-            for a in range(nA)
+            for a in P[s].keys()
         }
-        for s in range(nS)
+        for s in P.keys()
     }
 
-    return nSp, nS, nA, P, start_pdf, start_cdf, next_reward_cdf, transition, reward
+    return nS, nA, P, reset_pdf, reset_cdf, step_cdf, transition, reward
 

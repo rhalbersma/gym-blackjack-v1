@@ -77,22 +77,22 @@ class BlackjackEnv(discrete.DiscreteEnv):
         self.reward_range = (np.min(self.payoff), np.max(self.payoff))
         self.dealer_policy = dealer.hits_on_soft_17 if dealer_hits_on_soft_17 else dealer.stands_on_17
         self.observation_shape = (nH, nC)
-        self.nSp, nS, nA, P, start_pdf, self.start_cdf, self.next_reward_cdf, self.transition, self.reward = model.build(self)
-        super(BlackjackEnv, self).__init__(nS, nA, P, start_pdf)
+        nS, nA, P, reset_pdf, self.reset_cdf, self.step_cdf, self.transition, self.reward = model.build(self)
+        super(BlackjackEnv, self).__init__(nS, nA, P, reset_pdf)
 
-    def _sample_from_categorical_cdf(self, cdf):
+    def _sample_from_categorical(self, cdf):
         return int((cdf > self.np_random.rand()).argmax())
 
     def step(self, a):
-        next_reward_cdf = self.next_reward_cdf[self.s][a]
-        next_reward_idx = self._sample_from_categorical_cdf(next_reward_cdf)
-        prob, next, reward, done = self.P[self.s][a][next_reward_idx]
+        cdf = self.step_cdf[self.s][a]
+        idx = self._sample_from_categorical(cdf)
+        prob, next, reward, done = self.P[self.s][a][idx]
         self.s = next
         self.lastaction = a
         return next, reward, done, { 'prob': prob }
 
     def reset(self):
-        self.s = self._sample_from_categorical_cdf(self.start_cdf)
+        self.s = self._sample_from_categorical(self.reset_cdf)
         self.lastaction = None
         return self.s
 
