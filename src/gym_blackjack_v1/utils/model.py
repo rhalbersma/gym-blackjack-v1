@@ -123,20 +123,20 @@ def build(env):
     # In other words: P is a sparse representation of Sutton & Barto's dense 4-tensor p(s', r|s, a).
     P = { 
         s: {
-            Action.HIT: [
-                (prob_sHs0[s, next], next, unique_rewards[no_reward], False)
-                for next in range(nS)
-                if prob_sHs0[s, next] > 0
-            ] + [
-                (prob_saTr[s, Action.HIT, r], -1, unique_rewards[r], True)
-                for r in range(nR)
-                if prob_saTr[s, Action.HIT, r] > 0
-            ],
-            Action.STAND: [
+            int(Action.STAND): [
                 (prob_saTr[s, Action.STAND, r], -1, unique_rewards[r], True)
                 for r in range(nR)
                 if prob_saTr[s, Action.STAND, r] > 0
-            ]
+            ],
+            int(Action.HIT): [
+                (prob_saTr[s, Action.HIT, r], -1, unique_rewards[r], True)
+                for r in range(nR)
+                if prob_saTr[s, Action.HIT, r] > 0
+            ] + [
+                (prob_sHs0[s, next], next, unique_rewards[no_reward], False)
+                for next in range(nS)
+                if prob_sHs0[s, next] > 0
+            ],
         }
         for s in range(nS)
     }
